@@ -1,4 +1,4 @@
-.PHONY: install lint test test-model data baselines train shift serving gate eval figures serve
+.PHONY: install lint test test-model data baselines train shift serving gate eval figures readme readme-check serve
 
 PY ?= .venv/bin/python
 SCHEME ?= random
@@ -37,15 +37,23 @@ serving:            ## ONNX export, parity, load test
 gate:               ## three candidates, one promotion
 	$(PY) eval/run_gate.py --scheme $(SCHEME)
 
-eval: baselines     ## the whole experiment, in order
+eval: baselines     ## the whole experiment, in order, then the README it produces
 	$(PY) eval/run_train.py --scheme random
 	$(PY) eval/run_train.py --scheme contiguous
 	$(PY) eval/run_shift.py --scheme random
 	$(PY) eval/run_serving.py --scheme random
 	$(PY) eval/run_gate.py --scheme random
+	$(PY) scripts/make_figures.py
+	$(PY) scripts/render_readme.py --scheme random
 
 figures:
 	$(PY) scripts/make_figures.py
+
+readme:             ## fill the README's result sections from runs/
+	$(PY) scripts/render_readme.py --scheme $(SCHEME)
+
+readme-check:       ## fail when the README and runs/ disagree
+	$(PY) scripts/render_readme.py --scheme $(SCHEME) --check
 
 serve:
 	$(PY) -m foldgate.cli serve --scheme $(SCHEME) --port 8080

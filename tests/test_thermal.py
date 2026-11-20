@@ -160,3 +160,25 @@ def test_waiting_for_memory_returns_once_the_machine_recovers(
     readings = iter([True, True, False, False])
     monkeypatch.setattr(thermal, "memory_is_tight", lambda *_a, **_k: next(readings))
     assert 0.0 < thermal.wait_for_memory(poll=0.01, patience=5.0) < 0.05
+
+
+def test_releasing_the_cache_reports_a_pool_size_and_does_not_raise() -> None:
+    """On a machine without Metal this is a no-op; on one with it, a number in GiB."""
+    from foldgate.thermal import release_cache
+
+    pool = release_cache()
+    assert pool >= 0.0
+
+
+def test_releasing_the_cache_survives_a_torch_without_metal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A machine with no Metal must get a no-op, not an exception mid-epoch."""
+    import sys
+    from types import SimpleNamespace
+
+    import foldgate.thermal as thermal
+
+    no_metal = SimpleNamespace(backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)))
+    monkeypatch.setitem(sys.modules, "torch", no_metal)
+    assert thermal.release_cache() == 0.0

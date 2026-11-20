@@ -165,6 +165,27 @@ def limit_threads(threads: int = DEFAULT_THREADS) -> None:
         pass  # interop threads can only be set once per process
 
 
+def release_cache() -> float:
+    """Hand cached GPU blocks back, and report the pool size in GiB before doing it.
+
+    PyTorch's Metal allocator keeps freed blocks to reuse, which is right for throughput and
+    wrong under a hard cap: over a hundred or so steps the pool fills with blocks of the
+    wrong shape and a 33 MiB request fails against a 4.3 GiB pool. That is what ended the
+    third attempt at this run. Releasing during the duty cycle's pause costs nothing, because
+    the GPU is idle then anyway.
+    """
+    try:
+        import torch
+
+        if not torch.backends.mps.is_available():
+            return 0.0
+        pool = torch.mps.driver_allocated_memory() / (1 << 30)
+        torch.mps.empty_cache()
+        return float(pool)
+    except (ImportError, AttributeError, RuntimeError):
+        return 0.0
+
+
 def background_qos() -> bool:
     """Ask for background scheduling priority. True when the system accepted it."""
     try:
@@ -245,6 +266,7 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
             self.cycle = DutyCycle(duty)
             self.batches = 0
             self.waited = 0.0
+            self.pool = 0.0
 
         def on_train_batch_start(self, *_: Any, **__: Any) -> None:
             if minimum and self.batches % every == 0:
@@ -257,6 +279,8 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
             self.batches += 1
             if self.batches % every:
                 return
+            # The GPU is idle in the pause this just took, so give the pool back here.
+            self.pool = release_cache()
             total = self.cycle.worked + self.cycle.paused
             per_batch = total / self.batches
             left = max(0, (trainer.num_training_batches or 0) - trainer.fit_loop.batch_idx - 1)
@@ -265,6 +289,7 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
                 f"/{trainer.num_training_batches}: {per_batch:.1f} s a batch, "
                 f"{left * per_batch / 60:.0f} min left in this epoch, duty {self.cycle.share:.0%}"
                 + f", {available_memory():.0%} memory available"
+                + (f", GPU pool {self.pool:.1f} GiB" if self.pool else "")
                 + (f", pressure {pressure_level()}" if pressure_level() > 1 else "")
                 + (f", waited {self.waited / 60:.0f} min for memory" if self.waited else ""),
                 flush=True,

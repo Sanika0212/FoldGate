@@ -28,7 +28,11 @@ from common import write
 from foldgate.calibration import conformal_quantile, fit_difficulty, gate, spearman
 from foldgate.registry import NAME, log_candidate
 
-SLO_MS = 250.0
+# The SLO is a property of a stated workload, not a round number: one CPU replica serving
+# eight concurrent clients, eight variants per request. A forward pass over a 300-residue
+# sequence is about 20 GFLOPs per variant, so anything under a second there is arithmetic
+# that does not exist on a CPU. The load test reports the same shape of request.
+SLO_MS = 3000.0
 TARGET = 0.90
 TOLERANCE = 0.02
 

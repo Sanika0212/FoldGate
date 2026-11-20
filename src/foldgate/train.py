@@ -15,7 +15,7 @@ import lightning as L
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 from foldgate.model import DEFAULT_BACKBONE, VariantRegressor, tokenizer
 
@@ -47,6 +47,42 @@ class Collate:
             "zero_shot": torch.tensor([b["zs"] for b in batch]),
             "y": torch.tensor([b["y"] for b in batch]),
         }
+
+
+class LengthGrouped(Sampler[list[int]]):
+    """Batches of similar-length proteins.
+
+    The pooled assays run from 86 to 286 residues, and padding is to the longest sequence in
+    the batch, so shuffling uniformly makes almost every batch as expensive as the longest
+    protein in the set. Shuffling, sorting inside large chunks and then shuffling the batch
+    order keeps the randomness that training needs and pays for the padding only once.
+    """
+
+    def __init__(self, lengths: np.ndarray, batch_size: int, shuffle: bool = True,
+                 chunk_batches: int = 50, seed: int = 0) -> None:
+        self.lengths = np.asarray(lengths)
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.chunk = batch_size * chunk_batches
+        self.epoch = 0
+        self.seed = seed
+
+    def __len__(self) -> int:
+        return int(np.ceil(len(self.lengths) / self.batch_size))
+
+    def __iter__(self) -> Any:
+        rng = np.random.default_rng(self.seed + self.epoch)
+        self.epoch += 1
+        order = rng.permutation(len(self.lengths)) if self.shuffle else np.arange(len(self.lengths))
+        batches = []
+        for start in range(0, len(order), self.chunk):
+            chunk = order[start : start + self.chunk]
+            chunk = chunk[np.argsort(self.lengths[chunk], kind="stable")]
+            batches += [chunk[i : i + self.batch_size].tolist()
+                        for i in range(0, len(chunk), self.batch_size)]
+        if self.shuffle:
+            rng.shuffle(batches)
+        return iter(batches)
 
 
 class Module(L.LightningModule):
@@ -90,6 +126,8 @@ class TrainConfig:
     strategy: str = "auto"
     devices: int | str = 1
     accelerator: str = "auto"
+    name: str = "train"
+    precision: str = "16-mixed"  # on CPU this falls back, so the tests pass "32-true"
 
 
 def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
@@ -97,15 +135,33 @@ def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
     rng = np.random.default_rng(cfg.seed)
     val_mask = rng.random(len(train)) < 0.1
     collate = Collate(cfg.backbone)
-    tr = DataLoader(Variants(train[~val_mask]), batch_size=cfg.batch_size, shuffle=True, collate_fn=collate)
-    va = DataLoader(Variants(train[val_mask]), batch_size=cfg.batch_size * 2, collate_fn=collate)
+    fit_rows, val_rows = train[~val_mask], train[val_mask]
+    tr = DataLoader(
+        Variants(fit_rows),
+        batch_sampler=LengthGrouped(
+            fit_rows["sequence"].str.len().to_numpy(), cfg.batch_size, seed=cfg.seed
+        ),
+        collate_fn=collate,
+    )
+    va = DataLoader(
+        Variants(val_rows),
+        batch_sampler=LengthGrouped(
+            val_rows["sequence"].str.len().to_numpy(), cfg.batch_size * 2, shuffle=False
+        ),
+        collate_fn=collate,
+    )
     module = Module(cfg.backbone, cfg.rank, cfg.lr)
+    if logger is None:
+        # A run takes tens of minutes with the progress bar off, so metrics land in a CSV
+        # where they can be watched: runs/lightning/<name>/version_*/metrics.csv.
+        logger = L.pytorch.loggers.CSVLogger("runs/lightning", name=cfg.name, flush_logs_every_n_steps=20)
     trainer = L.Trainer(
         max_epochs=cfg.epochs,
         accelerator=cfg.accelerator,
         devices=cfg.devices,
         strategy=cfg.strategy,
-        logger=logger or False,
+        precision=cfg.precision,  # type: ignore[arg-type]
+        logger=logger,
         enable_checkpointing=False,
         callbacks=[L.pytorch.callbacks.EarlyStopping("val_mse", patience=2)],
         enable_progress_bar=False,
@@ -124,7 +180,12 @@ def predict(
 
     dev = device()
     module = module.to(dev).eval()
-    loader = DataLoader(Variants(df), batch_size=batch_size, collate_fn=Collate(module.hparams["backbone"]))
+    order = np.argsort(df["sequence"].str.len().to_numpy(), kind="stable")
+    loader = DataLoader(
+        Variants(df.iloc[order]),
+        batch_size=batch_size,
+        collate_fn=Collate(module.hparams["backbone"]),
+    )
     preds, embs = [], []
     for batch in loader:
         batch = {k: v.to(dev) for k, v in batch.items()}
@@ -132,4 +193,8 @@ def predict(
         if embeddings:
             e = module.net.embed(batch["input_ids"], batch["attention_mask"], batch["position"])
             embs.append(e.float().cpu().numpy())
-    return np.concatenate(preds), (np.concatenate(embs) if embeddings else None)
+    # Scoring went in length order; the caller gets its own order back.
+    inverse = np.empty(len(order), dtype=int)
+    inverse[order] = np.arange(len(order))
+    out = np.concatenate(preds)[inverse]
+    return out, (np.concatenate(embs)[inverse] if embeddings else None)

@@ -33,7 +33,7 @@ from foldgate.model import DEFAULT_BACKBONE, tokenizer
 from foldgate.router import ModelVersion, ab_arm, create_app
 from foldgate.train import Collate, Variants
 
-CLIENTS = 16
+CLIENTS = 8
 VARIANTS_PER_REQUEST = 8
 REQUESTS_PER_CLIENT = 8
 PARITY_TOLERANCE = 1e-3

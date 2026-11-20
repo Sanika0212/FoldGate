@@ -29,3 +29,6 @@ runs/**/*.html
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+
+# Lightning CSV logs from training runs.
+runs/lightning/

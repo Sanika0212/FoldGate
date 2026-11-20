@@ -74,7 +74,12 @@ def main() -> None:
     print(f"{args.scheme}: {len(train)} train, {len(calib)} calib, {len(test)} test")
 
     cfg = TrainConfig(
-        backbone=args.backbone, rank=args.rank, epochs=args.epochs, batch_size=args.batch_size, seed=args.seed
+        name=args.scheme,
+        backbone=args.backbone,
+        rank=args.rank,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        seed=args.seed,
     )
     module = fit(train, cfg)
     print(f"trainable share of weights: {module.net.trainable_share():.4f}")

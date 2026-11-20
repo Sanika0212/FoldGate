@@ -20,10 +20,18 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from foldgate.model import DEFAULT_BACKBONE, VariantRegressor, tokenizer
 from foldgate.thermal import background_qos, cap_memory, lightning_callback, limit_threads
 
-# Attention memory is batch times length squared, per layer. Measured on this machine:
-# 32 sequences of 286 residues wanted 4.4 GB and exceeded the Metal cap, while the same
-# batch of 86-residue proteins is cheap. This budget keeps the worst batch near 2 GB.
-MAX_ATTENTION = 1_200_000
+# Attention memory grows with batch times length squared, per layer, so a batch is capped
+# on that product. The figure is measured, not derived: the first guess of 1.2M still let a
+# batch of 32 at 180 residues through, and that one needs 5.20 GiB against a 4.74 GiB cap.
+# Peak GPU memory at this budget, per sequence length, on a 16 GB M4:
+#
+#   length  86 -> batch 32, 2.23 GiB      length 230 -> batch 12, 3.24 GiB
+#   length 120 -> batch 32, 3.34 GiB      length 286 -> batch  7, 2.28 GiB
+#   length 180 -> batch 20, 3.28 GiB
+#
+# So the worst batch sits around 3.3 GiB and the cap is 4.74, which is the headroom that
+# makes the run finish instead of dying in the optimizer step.
+MAX_ATTENTION = 650_000
 
 
 class Variants(Dataset[dict[str, Any]]):

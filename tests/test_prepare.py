@@ -86,3 +86,17 @@ def test_per_assay_reports_one_row_per_assay(
 
 def test_load_accepts_a_subset_of_assays(dataset_root: Path) -> None:
     assert list(load(["BBB_TEST_2026"], root=dataset_root)) == ["BBB_TEST_2026"]
+
+
+def test_a_partial_run_does_not_write_the_cache(
+    tmp_path: Path, assays: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cache covering two assays would starve every script that expects twelve."""
+    cache = tmp_path / "zero_shot.parquet"
+    monkeypatch.setattr(
+        "foldgate.model.zero_shot",
+        lambda wild_type, positions, wt, mt, **kw: np.zeros(len(positions), dtype=np.float32),
+    )
+    df = zero_shot_frame(assays, cache=cache)
+    assert len(df) == sum(len(a.variants) for a in assays.values())
+    assert not cache.exists()

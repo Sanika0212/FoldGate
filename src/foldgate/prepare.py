@@ -19,7 +19,12 @@ ZERO_SHOT = Path("data/zero_shot.parquet")
 def zero_shot_frame(
     assays: dict[str, Assay] | None = None, backbone: str | None = None, cache: Path | None = None
 ) -> pd.DataFrame:
-    """One row per variant with its wild-type-marginal score, computed once and cached."""
+    """One row per variant with its wild-type-marginal score, computed once and cached.
+
+    Only a run that covers every assay writes the cache: a partial file would silently
+    starve the scripts that expect all of them.
+    """
+    from foldgate.data import ASSAYS
     from foldgate.model import DEFAULT_BACKBONE, zero_shot
 
     cache = cache or ZERO_SHOT
@@ -39,6 +44,8 @@ def zero_shot_frame(
         )
         frames.append(pd.DataFrame({"dms_id": dms_id, "mutant": v["mutant"].to_numpy(), "zero_shot": scores}))
     out = pd.concat(frames, ignore_index=True)
+    if not set(ASSAYS) <= set(assays):
+        return out
     cache.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(cache, index=False)
     return out

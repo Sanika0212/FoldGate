@@ -5,7 +5,7 @@
 1. **Export and parity.** LoRA is merged into the weights and the graph is exported twice
    (regressor, masked language model). Parity is the largest absolute difference between
    ONNX and PyTorch scores on a held-out batch; anything above 1e-3 fails the run.
-2. **Latency.** The router is driven in-process through ASGI with 16 concurrent clients
+2. **Latency.** The router is driven in-process through ASGI with 8 concurrent clients
    sending 8 variants each, with dynamic batching on and off, and with the zero-shot cache
    cold and warm. Reported as median, p95 and throughput.
 3. **A/B and shadow.** The same requests are replayed with a candidate model at a 20%

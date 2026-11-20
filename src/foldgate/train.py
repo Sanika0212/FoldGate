@@ -18,6 +18,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from foldgate.model import DEFAULT_BACKBONE, VariantRegressor, tokenizer
+from foldgate.thermal import background_qos, cap_memory, lightning_callback, limit_threads
 
 
 class Variants(Dataset[dict[str, Any]]):
@@ -134,6 +135,17 @@ class TrainConfig:
     devices: int | str = 1
     accelerator: str = "auto"
     name: str = "train"
+    # This laptop shuts itself down under a sustained full-tilt load, so a run works for a
+    # share of each second and idles for the rest. 1.0 is flat out.
+    duty: float = 0.5
+    # Background QoS pins the work to the efficiency cores, which on this machine made a
+    # step 28 s instead of 2.5. Thread caps and the duty cycle carry the thermal budget.
+    background: bool = False
+    # Three restarts on this machine traced to memory, not heat: the window server stalled
+    # in swap and the kernel watchdog rebooted. A run takes at most this share of memory and
+    # waits when the machine is short of it.
+    memory_share: float = 0.4
+    headroom: float = 0.25
     # Measured on this Mac's GPU, batch 32: uniform batches 5.82 s a step, length-grouped
     # 0.97, length-grouped in mixed precision 0.95. The grouping is the whole win, so the
     # default stays at full precision and there is no numerical question to answer.
@@ -141,6 +153,10 @@ class TrainConfig:
 
 
 def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
+    limit_threads()
+    cap_memory(cfg.memory_share)
+    if cfg.background:
+        background_qos()
     L.seed_everything(cfg.seed, workers=True)
     rng = np.random.default_rng(cfg.seed)
     val_mask = rng.random(len(train)) < 0.1
@@ -171,7 +187,10 @@ def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
         precision=cfg.precision,  # type: ignore[arg-type]
         logger=logger,
         enable_checkpointing=False,
-        callbacks=[L.pytorch.callbacks.EarlyStopping("val_mse", patience=2)],
+        callbacks=[
+            L.pytorch.callbacks.EarlyStopping("val_mse", patience=2),
+            *([lightning_callback(cfg.duty, headroom=cfg.headroom)] if cfg.duty < 1 else []),
+        ],
         enable_progress_bar=False,
         enable_model_summary=False,
         log_every_n_steps=20,

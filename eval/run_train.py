@@ -65,6 +65,12 @@ def main() -> None:
     ap.add_argument("--backbone", default=DEFAULT_BACKBONE)
     ap.add_argument("--rank", type=int, default=8)
     ap.add_argument("--batch-size", type=int, default=32)
+    ap.add_argument(
+        "--duty",
+        type=float,
+        default=0.5,
+        help="share of each second spent working; the rest is idle, to keep the laptop cool",
+    )
     args = ap.parse_args()
 
     df = pooled(load(), IN_FAMILY, args.scheme, args.seed)
@@ -80,6 +86,7 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
         seed=args.seed,
+        duty=args.duty,
     )
     module = fit(train, cfg)
     print(f"trainable share of weights: {module.net.trainable_share():.4f}")

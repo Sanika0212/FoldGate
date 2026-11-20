@@ -20,6 +20,11 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from foldgate.model import DEFAULT_BACKBONE, VariantRegressor, tokenizer
 from foldgate.thermal import background_qos, cap_memory, lightning_callback, limit_threads
 
+# Attention memory is batch times length squared, per layer. Measured on this machine:
+# 32 sequences of 286 residues wanted 4.4 GB and exceeded the Metal cap, while the same
+# batch of 86-residue proteins is cheap. This budget keeps the worst batch near 2 GB.
+MAX_ATTENTION = 1_200_000
+
 
 class Variants(Dataset[dict[str, Any]]):
     def __init__(self, df: pd.DataFrame) -> None:
@@ -51,12 +56,22 @@ class Collate:
 
 
 class LengthGrouped(Sampler[list[int]]):
-    """Batches of similar-length proteins.
+    """Batches of similar-length proteins, each within a fixed attention budget.
 
-    The pooled assays run from 86 to 286 residues, and padding is to the longest sequence in
-    the batch, so shuffling uniformly makes almost every batch as expensive as the longest
+    Two things are being solved here, and the second was learned the hard way.
+
+    Padding is to the longest sequence in the batch, and the pooled assays run from 86 to 286
+    residues, so shuffling uniformly makes almost every batch as expensive as the longest
     protein in the set. Shuffling, sorting inside large chunks and then shuffling the batch
-    order keeps the randomness that training needs and pays for the padding only once.
+    order keeps the randomness that training needs and pays for the padding only once. That
+    alone took a step from 5.82 s to 0.97 s.
+
+    But grouping by length also concentrates every long protein into the same batch, and
+    attention costs memory in proportion to ``batch * length squared`` per layer. A batch of
+    32 at 286 residues asked for 4.4 GB across twelve layers and the run died of it, while
+    the same batch size at 86 residues is cheap. So a batch is closed when either the count
+    reaches ``batch_size`` or ``batch * length squared`` reaches ``max_attention``. Memory per
+    step is then flat whatever the protein, which is what makes the run predictable.
     """
 
     def __init__(
@@ -66,6 +81,7 @@ class LengthGrouped(Sampler[list[int]]):
         shuffle: bool = True,
         chunk_batches: int = 50,
         seed: int = 0,
+        max_attention: int = MAX_ATTENTION,
     ) -> None:
         self.lengths = np.asarray(lengths)
         self.batch_size = batch_size
@@ -73,24 +89,48 @@ class LengthGrouped(Sampler[list[int]]):
         self.chunk = batch_size * chunk_batches
         self.epoch = 0
         self.seed = seed
+        self.max_attention = max_attention
 
-    def __len__(self) -> int:
-        return int(np.ceil(len(self.lengths) / self.batch_size))
+    def _pack(self, chunk: np.ndarray) -> list[list[int]]:
+        """Split one length-sorted chunk into batches inside the attention budget."""
+        batches: list[list[int]] = []
+        current: list[int] = []
+        longest = 0
+        for index in chunk:
+            length = int(self.lengths[index])
+            width = max(longest, length)
+            if current and (
+                len(current) + 1 > self.batch_size or (len(current) + 1) * width * width > self.max_attention
+            ):
+                batches.append(current)
+                current, longest = [int(index)], length
+            else:
+                current.append(int(index))
+                longest = width
+        if current:
+            batches.append(current)
+        return batches
 
-    def __iter__(self) -> Any:
+    def batches(self) -> list[list[int]]:
+        """The batches for the current epoch, in the order they will be served."""
         rng = np.random.default_rng(self.seed + self.epoch)
-        self.epoch += 1
         order = rng.permutation(len(self.lengths)) if self.shuffle else np.arange(len(self.lengths))
-        batches = []
+        batches: list[list[int]] = []
         for start in range(0, len(order), self.chunk):
             chunk = order[start : start + self.chunk]
-            chunk = chunk[np.argsort(self.lengths[chunk], kind="stable")]
-            batches += [
-                chunk[i : i + self.batch_size].tolist() for i in range(0, len(chunk), self.batch_size)
-            ]
+            batches += self._pack(chunk[np.argsort(self.lengths[chunk], kind="stable")])
         if self.shuffle:
             rng.shuffle(batches)
-        return iter(batches)
+        return batches
+
+    def __len__(self) -> int:
+        # The count depends on the lengths, so it has to be built rather than divided out.
+        return len(self.batches())
+
+    def __iter__(self) -> Any:
+        out = self.batches()
+        self.epoch += 1
+        return iter(out)
 
 
 class Module(L.LightningModule):

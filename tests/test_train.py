@@ -66,3 +66,44 @@ def test_predict_returns_rows_in_the_callers_order(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("foldgate.model.device", lambda: torch.device("cpu"))
     out, _ = predict(Fake(), df, batch_size=8)  # type: ignore[arg-type]
     assert np.array_equal(out, df["sequence"].str.len().to_numpy())
+
+
+def test_a_batch_never_exceeds_the_attention_budget() -> None:
+    """The run that died asked for 32 sequences of 286 residues at once, which is 2.6M
+    attention entries per layer. Memory per step has to be flat in the protein's length."""
+    import numpy as np
+
+    from foldgate.train import MAX_ATTENTION, LengthGrouped
+
+    lengths = np.concatenate([np.full(400, 86), np.full(400, 180), np.full(400, 286)])
+    sampler = LengthGrouped(lengths, batch_size=32, seed=0)
+    batches = sampler.batches()
+    for batch in batches:
+        width = int(max(lengths[i] for i in batch))
+        assert len(batch) * width * width <= MAX_ATTENTION
+        assert len(batch) <= 32
+    # Short proteins still get full batches, so the budget costs nothing where it need not.
+    short = [b for b in batches if max(lengths[i] for i in b) == 86]
+    assert max(len(b) for b in short) == 32
+
+
+def test_the_budget_still_covers_every_row_exactly_once() -> None:
+    import numpy as np
+
+    from foldgate.train import LengthGrouped
+
+    lengths = np.random.default_rng(0).integers(86, 287, size=500)
+    sampler = LengthGrouped(lengths, batch_size=32, seed=0)
+    seen = sorted(i for batch in sampler.batches() for i in batch)
+    assert seen == list(range(500))
+
+
+def test_len_agrees_with_the_batches_it_will_serve() -> None:
+    """Lightning reads len() to size the epoch, so a disagreement misreports progress."""
+    import numpy as np
+
+    from foldgate.train import LengthGrouped
+
+    lengths = np.random.default_rng(1).integers(86, 287, size=700)
+    sampler = LengthGrouped(lengths, batch_size=32, seed=0)
+    assert len(sampler) == len(list(iter(sampler)))

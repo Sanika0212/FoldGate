@@ -69,6 +69,59 @@ def test_memory_headroom_is_a_fraction() -> None:
     assert 0.0 <= value <= 1.0
 
 
+def test_available_memory_is_a_fraction() -> None:
+    """Jetsam's own availability figure, which is what the gate decides on."""
+    from foldgate.thermal import available_memory
+
+    assert 0.0 <= available_memory() <= 1.0
+
+
+def test_pressure_level_is_one_of_the_kernels_levels() -> None:
+    from foldgate.thermal import pressure_level
+
+    assert pressure_level() in (1, 2, 4)
+
+
+def test_unreadable_sysctls_never_block_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On a machine that cannot be measured, the gate must open, not close."""
+    import foldgate.thermal as thermal
+
+    monkeypatch.setattr(thermal, "_sysctl_int", lambda _name: None)
+    assert thermal.available_memory() == 1.0
+    assert thermal.pressure_level() == 1
+    assert thermal.memory_is_tight() is False
+
+
+def test_memory_is_tight_on_low_availability_or_critical_pressure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import foldgate.thermal as thermal
+
+    monkeypatch.setattr(thermal, "available_memory", lambda: 0.40)
+    monkeypatch.setattr(thermal, "pressure_level", lambda: 2)
+    assert thermal.memory_is_tight() is False  # an ordinary busy laptop
+
+    monkeypatch.setattr(thermal, "available_memory", lambda: 0.05)
+    assert thermal.memory_is_tight() is True  # Jetsam territory
+
+    monkeypatch.setattr(thermal, "available_memory", lambda: 0.40)
+    monkeypatch.setattr(thermal, "pressure_level", lambda: 4)
+    assert thermal.memory_is_tight() is True  # critical pressure at any availability
+
+
+def test_the_gate_opens_on_a_laptop_with_low_free_pages_but_no_real_pressure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bug this replaced: free pages sit near a quarter on this machine always, so a
+    gate on them never opened and the run slept instead of training."""
+    import foldgate.thermal as thermal
+
+    monkeypatch.setattr(thermal, "memory_headroom", lambda: 0.20)
+    monkeypatch.setattr(thermal, "available_memory", lambda: 0.41)
+    monkeypatch.setattr(thermal, "pressure_level", lambda: 2)
+    assert thermal.wait_for_memory(poll=0.01) == 0.0
+
+
 def test_cap_memory_sets_the_metal_watermark(monkeypatch: pytest.MonkeyPatch) -> None:
     from foldgate.thermal import cap_memory
 
@@ -84,27 +137,26 @@ def test_waiting_for_memory_returns_at_once_when_there_is_room(
 ) -> None:
     import foldgate.thermal as thermal
 
-    monkeypatch.setattr(thermal, "memory_headroom", lambda: 0.9)
-    assert thermal.wait_for_memory(0.25, poll=0.01) == 0.0
+    monkeypatch.setattr(thermal, "memory_is_tight", lambda *_a, **_k: False)
+    assert thermal.wait_for_memory(poll=0.01) == 0.0
 
 
 def test_waiting_for_memory_gives_up_rather_than_blocking_forever(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A machine that never frees memory must not stall a run indefinitely."""
+    """A machine that never recovers must not stall a run indefinitely."""
     import foldgate.thermal as thermal
 
-    monkeypatch.setattr(thermal, "memory_headroom", lambda: 0.01)
-    waited = thermal.wait_for_memory(0.25, poll=0.01, patience=0.05)
+    monkeypatch.setattr(thermal, "memory_is_tight", lambda *_a, **_k: True)
+    waited = thermal.wait_for_memory(poll=0.01, patience=0.05)
     assert 0.0 < waited <= 0.06
 
 
-def test_waiting_for_memory_returns_once_the_machine_frees_some(
+def test_waiting_for_memory_returns_once_the_machine_recovers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import foldgate.thermal as thermal
 
-    readings = iter([0.05, 0.05, 0.6, 0.6])
-    monkeypatch.setattr(thermal, "memory_headroom", lambda: next(readings))
-    waited = thermal.wait_for_memory(0.25, poll=0.01, patience=5.0)
-    assert 0.0 < waited < 0.05
+    readings = iter([True, True, False, False])
+    monkeypatch.setattr(thermal, "memory_is_tight", lambda *_a, **_k: next(readings))
+    assert 0.0 < thermal.wait_for_memory(poll=0.01, patience=5.0) < 0.05

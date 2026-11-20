@@ -143,9 +143,11 @@ class TrainConfig:
     background: bool = False
     # Three restarts on this machine traced to memory, not heat: the window server stalled
     # in swap and the kernel watchdog rebooted. A run takes at most this share of memory and
-    # waits when the machine is short of it.
+    # pauses when the kernel says memory is genuinely in trouble. The threshold is Jetsam's
+    # own availability figure, not free pages: free pages sit near 24% on this laptop no
+    # matter what, so a gate on them never opens.
     memory_share: float = 0.4
-    headroom: float = 0.25
+    min_available: float = 0.18
     # Measured on this Mac's GPU, batch 32: uniform batches 5.82 s a step, length-grouped
     # 0.97, length-grouped in mixed precision 0.95. The grouping is the whole win, so the
     # default stays at full precision and there is no numerical question to answer.
@@ -189,7 +191,7 @@ def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
         enable_checkpointing=False,
         callbacks=[
             L.pytorch.callbacks.EarlyStopping("val_mse", patience=2),
-            *([lightning_callback(cfg.duty, headroom=cfg.headroom)] if cfg.duty < 1 else []),
+            *([lightning_callback(cfg.duty, minimum=cfg.min_available)] if cfg.duty < 1 else []),
         ],
         enable_progress_bar=False,
         enable_model_summary=False,

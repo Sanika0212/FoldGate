@@ -2,20 +2,35 @@
 
 This was written after three restarts on a 16 GB M4 MacBook Air. The panic log named the
 cause: ``userspace watchdog timeout: no successful checkins from WindowServer in 121
-seconds``. The machine had run out of memory, and the resulting swap thrash stalled the
-display server long enough for the kernel to give up and reboot. The memory-exhaustion
-report from the same night named the largest process: the training run.
+seconds``. The machine had run out of memory, the resulting swap thrash stalled the display
+server long enough for the kernel to give up, and the memory-exhaustion report from the same
+night named the largest process: the training run. So the thing to bound is memory first and
+heat second.
 
-So the thing to bound is memory first and heat second.
+A first version of this gated on free pages: it waited until "free plus inactive plus
+speculative" reached a quarter of physical memory. That was the wrong quantity. macOS keeps
+almost nothing free on purpose, because it compresses rather than wastes, so on this machine
+the metric sits at about 24% whatever is happening and a 25% threshold never opens. A run
+started with that gate slept in it for ten minutes at a time and trained almost nothing.
 
-1. ``cap_memory()`` limits how much of the machine a Metal run may take, so an allocation
-   fails inside this process instead of pushing the whole system into swap.
-2. ``memory_headroom()`` reports the share of memory that is free, and ``wait_for_memory``
-   blocks while the machine is short of it. A long run checks before each stretch of work,
-   so another application opening is a pause here rather than a reboot.
-3. ``limit_threads()`` caps the thread pools that numerical libraries open by default.
-4. ``DutyCycle`` idles between batches, which is what keeps a fanless machine cool.
-5. ``background_qos()`` is available but costs about ten times the run time on GPU work,
+What the kernel itself uses to decide whether memory is in trouble is better and is readable:
+
+1. ``kern.memorystatus_level`` is the share of memory Jetsam considers available. It read
+   41% on the same machine, at the same moment, as the 24% above. Jetsam is what killed
+   processes on the reboot night, so this is the number that matters.
+2. ``kern.memorystatus_vm_pressure_level`` is 1 normal, 2 warning, 4 critical. Everyday use
+   of this laptop sits at 2, so only 4 is worth stopping for.
+
+So the gate waits when Jetsam's availability is genuinely low or pressure is critical, and
+its patience is a minute rather than ten, because a gate that parks a run is as bad as no
+gate at all. Around that:
+
+3. ``cap_memory()`` limits how much of the machine a Metal run may take, so an allocation
+   fails inside this process instead of pushing the whole system into swap. Measured: the cap
+   costs nothing, 1.17 s against 1.07 s on the same GPU workload.
+4. ``limit_threads()`` caps the thread pools that numerical libraries open by default.
+5. ``DutyCycle`` idles between batches, which is what keeps a fanless machine cool.
+6. ``background_qos()`` is available but costs about ten times the run time on GPU work,
    because it pins to the efficiency cores. Prefer the memory cap and the duty cycle.
 """
 
@@ -27,7 +42,11 @@ from typing import Any
 
 DEFAULT_THREADS = 2
 DEFAULT_MEMORY_SHARE = 0.4
-MIN_HEADROOM = 0.25
+# Jetsam's own availability figure, below which a run should wait. This laptop idles
+# around 40%, and the night it rebooted Jetsam was killing applications outright.
+MIN_AVAILABLE = 0.18
+# 1 normal, 2 warning, 4 critical. Ordinary use of this machine sits at 2.
+CRITICAL_PRESSURE = 4
 
 
 def cap_memory(share: float = DEFAULT_MEMORY_SHARE) -> None:
@@ -70,14 +89,57 @@ def memory_headroom() -> float:
     return min(1.0, free * page / total) if total else 1.0
 
 
-def wait_for_memory(minimum: float = MIN_HEADROOM, poll: float = 15.0, patience: float = 600.0) -> float:
-    """Block while the machine is short of memory; returns the seconds spent waiting.
+def _sysctl_int(name: str) -> int | None:
+    """One integer sysctl, or None where the platform does not have it."""
+    import subprocess
 
-    After ``patience`` it gives up waiting and returns anyway: the caller decides whether to
-    carry on or stop, and a run that waits forever is its own kind of failure.
+    try:
+        out = subprocess.run(
+            ["sysctl", "-n", name], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return int(out) if out.lstrip("-").isdigit() else None
+
+
+def available_memory() -> float:
+    """The share of memory Jetsam considers available, from 0 to 1.
+
+    This is ``kern.memorystatus_level``, the number the kernel uses to decide whether to
+    start killing processes, which is what happened on the night this machine rebooted.
+    Returns 1.0 where it cannot be read, so a guard built on it never blocks a run on a
+    machine it cannot measure.
+    """
+    level = _sysctl_int("kern.memorystatus_level")
+    return 1.0 if level is None else max(0.0, min(1.0, level / 100))
+
+
+def pressure_level() -> int:
+    """1 normal, 2 warning, 4 critical, from ``kern.memorystatus_vm_pressure_level``."""
+    level = _sysctl_int("kern.memorystatus_vm_pressure_level")
+    return 1 if level is None else level
+
+
+def memory_is_tight(minimum: float = MIN_AVAILABLE, critical: int = CRITICAL_PRESSURE) -> bool:
+    """Whether the machine is in real trouble, as opposed to merely busy."""
+    return available_memory() < minimum or pressure_level() >= critical
+
+
+def wait_for_memory(
+    minimum: float = MIN_AVAILABLE,
+    poll: float = 5.0,
+    patience: float = 60.0,
+    critical: int = CRITICAL_PRESSURE,
+) -> float:
+    """Block while the machine is genuinely short of memory; returns the seconds waited.
+
+    Patience is deliberately short. The point is to pace a run around a burst of pressure,
+    not to park it: a gate that waits ten minutes at a time trains nothing, which is how the
+    first version of this failed. After ``patience`` it returns and lets the run continue,
+    bounded by ``cap_memory`` and by whatever watchdog is outside this process.
     """
     waited = 0.0
-    while memory_headroom() < minimum and waited < patience:
+    while memory_is_tight(minimum, critical) and waited < patience:
         time.sleep(poll)
         waited += poll
     return waited
@@ -170,7 +232,7 @@ class DutyCycle:
         return self.worked / total if total else 1.0
 
 
-def lightning_callback(duty: float = 0.5, every: int = 25, headroom: float = MIN_HEADROOM) -> Any:
+def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_AVAILABLE) -> Any:
     """A Lightning callback that applies :class:`DutyCycle` around every training batch.
 
     It also prints a line every ``every`` batches. A throttled run takes long enough that
@@ -185,9 +247,9 @@ def lightning_callback(duty: float = 0.5, every: int = 25, headroom: float = MIN
             self.waited = 0.0
 
         def on_train_batch_start(self, *_: Any, **__: Any) -> None:
-            if headroom and self.batches % every == 0:
+            if minimum and self.batches % every == 0:
                 # Another application may have taken the memory since the last check.
-                self.waited += wait_for_memory(headroom)
+                self.waited += wait_for_memory(minimum)
             self.cycle.begin()
 
         def on_train_batch_end(self, trainer: Any, *_: Any, **__: Any) -> None:
@@ -202,7 +264,8 @@ def lightning_callback(duty: float = 0.5, every: int = 25, headroom: float = MIN
                 f"  epoch {trainer.current_epoch} batch {trainer.fit_loop.batch_idx + 1}"
                 f"/{trainer.num_training_batches}: {per_batch:.1f} s a batch, "
                 f"{left * per_batch / 60:.0f} min left in this epoch, duty {self.cycle.share:.0%}"
-                + f", {memory_headroom():.0%} memory free"
+                + f", {available_memory():.0%} memory available"
+                + (f", pressure {pressure_level()}" if pressure_level() > 1 else "")
                 + (f", waited {self.waited / 60:.0f} min for memory" if self.waited else ""),
                 flush=True,
             )

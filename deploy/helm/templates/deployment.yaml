@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: foldgate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: foldgate
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: foldgate
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.service.targetPort | quote }}
+        prometheus.io/path: /metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: fetch-version
+          image: {{ .Values.artifacts.awscliImage }}
+          command: ["aws", "s3", "sync", {{ .Values.artifacts.uri | quote }}, {{ .Values.artifacts.mountPath | quote }}]
+          volumeMounts:
+            - name: models
+              mountPath: {{ .Values.artifacts.mountPath }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      containers:
+        - name: router
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - --scheme
+            - {{ .Values.router.scheme | quote }}
+            - --port
+            - {{ .Values.service.targetPort | quote }}
+            - --host
+            - 0.0.0.0
+            {{- if not .Values.router.batching }}
+            - --no-batching
+            {{- end }}
+          env:
+            - name: FOLDGATE_ARTIFACTS
+              value: {{ .Values.artifacts.mountPath | quote }}
+            - name: FOLDGATE_MAX_BATCH
+              value: {{ .Values.router.maxBatch | quote }}
+            - name: FOLDGATE_MAX_WAIT_MS
+              value: {{ .Values.router.maxWaitMs | quote }}
+            - name: FOLDGATE_CANDIDATE_SHARE
+              value: {{ .Values.router.candidateShare | quote }}
+            - name: FOLDGATE_SHADOW
+              value: {{ .Values.router.shadow | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: models
+              mountPath: {{ .Values.artifacts.mountPath }}
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: models
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,45 @@
+# The same version served by KServe instead of the chart, with a canary split.
+#
+# canaryTrafficPercent is the cluster equivalent of the router's A/B share: the predictor
+# below is the candidate, the previously promoted revision keeps the rest of the traffic.
+# Written and validated; not run (this project's cluster work was done on kind, and the
+# README says which parts actually ran).
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: foldgate
+  annotations:
+    serving.kserve.io/enable-prometheus-scraping: "true"
+spec:
+  predictor:
+    minReplicas: 2
+    maxReplicas: 8
+    scaleTarget: 70
+    scaleMetric: cpu
+    canaryTrafficPercent: 20
+    containers:
+      - name: kserve-container
+        image: ghcr.io/sanika0212/foldgate:0.1.0
+        args: ["serve", "--scheme", "random", "--port", "8080", "--host", "0.0.0.0"]
+        env:
+          - name: FOLDGATE_ARTIFACTS
+            value: /mnt/models
+          - name: FOLDGATE_MAX_BATCH
+            value: "64"
+          - name: FOLDGATE_MAX_WAIT_MS
+            value: "8"
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "2"
+            memory: 4Gi
+    storageUri: s3://foldgate-artifacts/versions/champion

@@ -1,0 +1,48 @@
+image:
+  repository: ghcr.io/sanika0212/foldgate
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# The router keeps the zero-shot logits of recent proteins in memory, so requests for the
+# same protein should land on the same replica.
+sessionAffinity: ClientIP
+
+service:
+  port: 80
+  targetPort: 8080
+
+# Where the promoted version is fetched from. An init container copies it into an
+# emptyDir that the router reads, so the image carries no model weights.
+artifacts:
+  uri: s3://foldgate-artifacts/versions/champion
+  mountPath: /models/champion
+  awscliImage: amazon/aws-cli:2.31.19
+
+router:
+  scheme: random
+  batching: true
+  maxBatch: 64
+  maxWaitMs: 8
+  candidateShare: 0.0
+  shadow: false
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+serviceMonitor:
+  # Off by default: it needs the Prometheus operator's CRDs in the cluster.
+  enabled: false
+  interval: 15s

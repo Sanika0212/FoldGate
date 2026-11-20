@@ -1,0 +1,6 @@
+apiVersion: v2
+name: foldgate
+description: The FoldGate router, serving a promoted variant-effect version over HTTP
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,187 @@
+{
+  "scheme": "random",
+  "seed": 0,
+  "n_test": 4541,
+  "baselines": {
+    "zero_shot": {
+      "per_assay": [
+        {
+          "dms_id": "BLAT_ECOLX_Firnberg_2014",
+          "n": 980,
+          "spearman": 0.5389756212612061,
+          "ndcg_top10": 0.5873890623415057
+        },
+        {
+          "dms_id": "CALM1_HUMAN_Weile_2017",
+          "n": 383,
+          "spearman": 0.23722305476193734,
+          "ndcg_top10": 0.7937386148025956
+        },
+        {
+          "dms_id": "CCDB_ECOLI_Tripathi_2016",
+          "n": 353,
+          "spearman": -0.040605179720976506,
+          "ndcg_top10": 0.7324726153569572
+        },
+        {
+          "dms_id": "DYR_ECOLI_Thompson_2019",
+          "n": 479,
+          "spearman": 0.3224518697425774,
+          "ndcg_top10": 0.8216946219590261
+        },
+        {
+          "dms_id": "ESTA_BACSU_Nutschel_2020",
+          "n": 442,
+          "spearman": 0.18886745171403913,
+          "ndcg_top10": 0.7198823745777542
+        },
+        {
+          "dms_id": "NUD15_HUMAN_Suiter_2020",
+          "n": 577,
+          "spearman": 0.4100867000893537,
+          "ndcg_top10": 0.5320982241053118
+        },
+        {
+          "dms_id": "RASH_HUMAN_Bandaru_2017",
+          "n": 632,
+          "spearman": 0.5402339235106134,
+          "ndcg_top10": 0.7871792449945603
+        },
+        {
+          "dms_id": "SUMO1_HUMAN_Weile_2017",
+          "n": 361,
+          "spearman": 0.45263948618274374,
+          "ndcg_top10": 0.7127329650806029
+        },
+        {
+          "dms_id": "TAT_HV1BR_Fernandes_2016",
+          "n": 334,
+          "spearman": -0.10307372346875432,
+          "ndcg_top10": 0.5610094545675304
+        }
+      ],
+      "mean_spearman": 0.28297768934141554,
+      "mean_ndcg_top10": 0.6942441308650937
+    },
+    "ridge_one_hot": {
+      "per_assay": [
+        {
+          "dms_id": "BLAT_ECOLX_Firnberg_2014",
+          "n": 980,
+          "spearman": 0.7886036030595012,
+          "ndcg_top10": 0.8092860564052686
+        },
+        {
+          "dms_id": "CALM1_HUMAN_Weile_2017",
+          "n": 383,
+          "spearman": 0.2007686373081077,
+          "ndcg_top10": 0.7857606822358745
+        },
+        {
+          "dms_id": "CCDB_ECOLI_Tripathi_2016",
+          "n": 353,
+          "spearman": 0.5727292927960722,
+          "ndcg_top10": 1.0
+        },
+        {
+          "dms_id": "DYR_ECOLI_Thompson_2019",
+          "n": 479,
+          "spearman": 0.6379811933858021,
+          "ndcg_top10": 0.9164921162482417
+        },
+        {
+          "dms_id": "ESTA_BACSU_Nutschel_2020",
+          "n": 442,
+          "spearman": 0.697224355121797,
+          "ndcg_top10": 0.8781290846081041
+        },
+        {
+          "dms_id": "NUD15_HUMAN_Suiter_2020",
+          "n": 577,
+          "spearman": 0.7431712872731926,
+          "ndcg_top10": 0.8545942922521872
+        },
+        {
+          "dms_id": "RASH_HUMAN_Bandaru_2017",
+          "n": 632,
+          "spearman": 0.7255405162453168,
+          "ndcg_top10": 0.8759776905120066
+        },
+        {
+          "dms_id": "SUMO1_HUMAN_Weile_2017",
+          "n": 361,
+          "spearman": 0.6094004275008544,
+          "ndcg_top10": 0.7945189643202054
+        },
+        {
+          "dms_id": "TAT_HV1BR_Fernandes_2016",
+          "n": 334,
+          "spearman": 0.514689700872559,
+          "ndcg_top10": 0.7248716348761289
+        }
+      ],
+      "mean_spearman": 0.6100121126181336,
+      "mean_ndcg_top10": 0.8488478357175574
+    },
+    "ridge_one_hot_plus_zero_shot": {
+      "per_assay": [
+        {
+          "dms_id": "BLAT_ECOLX_Firnberg_2014",
+          "n": 980,
+          "spearman": 0.8558805470022699,
+          "ndcg_top10": 0.8370120103278187
+        },
+        {
+          "dms_id": "CALM1_HUMAN_Weile_2017",
+          "n": 383,
+          "spearman": 0.2941100330813501,
+          "ndcg_top10": 0.8312848602350975
+        },
+        {
+          "dms_id": "CCDB_ECOLI_Tripathi_2016",
+          "n": 353,
+          "spearman": 0.5736714293886236,
+          "ndcg_top10": 1.0
+        },
+        {
+          "dms_id": "DYR_ECOLI_Thompson_2019",
+          "n": 479,
+          "spearman": 0.7081065853722452,
+          "ndcg_top10": 0.9179627467689799
+        },
+        {
+          "dms_id": "ESTA_BACSU_Nutschel_2020",
+          "n": 442,
+          "spearman": 0.6981122301830994,
+          "ndcg_top10": 0.9023889272052206
+        },
+        {
+          "dms_id": "NUD15_HUMAN_Suiter_2020",
+          "n": 577,
+          "spearman": 0.7843227832982517,
+          "ndcg_top10": 0.8618059436029449
+        },
+        {
+          "dms_id": "RASH_HUMAN_Bandaru_2017",
+          "n": 632,
+          "spearman": 0.8304748111809511,
+          "ndcg_top10": 0.8717667871576804
+        },
+        {
+          "dms_id": "SUMO1_HUMAN_Weile_2017",
+          "n": 361,
+          "spearman": 0.6364128189039041,
+          "ndcg_top10": 0.7837355176081808
+        },
+        {
+          "dms_id": "TAT_HV1BR_Fernandes_2016",
+          "n": 334,
+          "spearman": 0.5145660272838752,
+          "ndcg_top10": 0.7183664536254989
+        }
+      ],
+      "mean_spearman": 0.6550730295216189,
+      "mean_ndcg_top10": 0.8582581385034912
+    }
+  }
+}

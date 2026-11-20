@@ -253,11 +253,17 @@ class DutyCycle:
         return self.worked / total if total else 1.0
 
 
-def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_AVAILABLE) -> Any:
+def lightning_callback(
+    duty: float = 0.5,
+    every: int = 25,
+    minimum: float = MIN_AVAILABLE,
+    release_every: int = 5,
+) -> Any:
     """A Lightning callback that applies :class:`DutyCycle` around every training batch.
 
-    It also prints a line every ``every`` batches. A throttled run takes long enough that
-    silence is indistinguishable from a hang, and the progress bar is off.
+    It prints a line every ``every`` batches, because a throttled run takes long enough
+    that silence is indistinguishable from a hang and the progress bar is off, and it hands
+    the GPU pool back every ``release_every`` batches.
     """
     import lightning as L
 
@@ -267,6 +273,7 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
             self.batches = 0
             self.waited = 0.0
             self.pool = 0.0
+            self.peak_pool = 0.0
 
         def on_train_batch_start(self, *_: Any, **__: Any) -> None:
             if minimum and self.batches % every == 0:
@@ -277,10 +284,16 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
         def on_train_batch_end(self, trainer: Any, *_: Any, **__: Any) -> None:
             self.cycle.end()
             self.batches += 1
+            if release_every and self.batches % release_every == 0:
+                # The GPU is idle in the pause this just took, so give the pool back here.
+                # Measured every 25 batches, the pool reached 4.4 GiB against a 4.74 GiB
+                # cap, which is 340 MiB of margin and not enough. Every 5 keeps it low, and
+                # emptying the cache costs milliseconds against a batch of 0.7 s.
+                pool = release_cache()
+                self.peak_pool = max(self.peak_pool, pool)
+                self.pool = pool
             if self.batches % every:
                 return
-            # The GPU is idle in the pause this just took, so give the pool back here.
-            self.pool = release_cache()
             total = self.cycle.worked + self.cycle.paused
             per_batch = total / self.batches
             left = max(0, (trainer.num_training_batches or 0) - trainer.fit_loop.batch_idx - 1)
@@ -289,7 +302,7 @@ def lightning_callback(duty: float = 0.5, every: int = 25, minimum: float = MIN_
                 f"/{trainer.num_training_batches}: {per_batch:.1f} s a batch, "
                 f"{left * per_batch / 60:.0f} min left in this epoch, duty {self.cycle.share:.0%}"
                 + f", {available_memory():.0%} memory available"
-                + (f", GPU pool {self.pool:.1f} GiB" if self.pool else "")
+                + (f", GPU pool {self.pool:.1f} GiB peak {self.peak_pool:.1f}" if self.pool else "")
                 + (f", pressure {pressure_level()}" if pressure_level() > 1 else "")
                 + (f", waited {self.waited / 60:.0f} min for memory" if self.waited else ""),
                 flush=True,

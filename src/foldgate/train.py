@@ -21,17 +21,18 @@ from foldgate.model import DEFAULT_BACKBONE, VariantRegressor, tokenizer
 from foldgate.thermal import background_qos, cap_memory, lightning_callback, limit_threads
 
 # Attention memory grows with batch times length squared, per layer, so a batch is capped
-# on that product. The figure is measured, not derived: the first guess of 1.2M still let a
-# batch of 32 at 180 residues through, and that one needs 5.20 GiB against a 4.74 GiB cap.
-# Peak GPU memory at this budget, per sequence length, on a 16 GB M4:
+# on that product. The figure is measured, and measured twice, because the first two
+# attempts were both wrong in instructive ways.
 #
-#   length  86 -> batch 32, 2.23 GiB      length 230 -> batch 12, 3.24 GiB
-#   length 120 -> batch 32, 3.34 GiB      length 286 -> batch  7, 2.28 GiB
-#   length 180 -> batch 20, 3.28 GiB
+# A single forward and backward at a budget of 650_000 peaks at 2.2 to 3.3 GiB depending on
+# the sequence length. A real training step at the same budget peaks at 4.5 GiB, because it
+# also carries optimizer state, the autograd graph and the framework's own overhead, which
+# an isolated step does not show: about 1.35 times the isolated figure. Against a 4.74 GiB
+# Metal cap that leaves 240 MiB, which is 5% and will hold until the heaviest batch of some
+# later epoch.
 #
-# So the worst batch sits around 3.3 GiB and the cap is 4.74, which is the headroom that
-# makes the run finish instead of dying in the optimizer step.
-MAX_ATTENTION = 650_000
+# So the budget is set from the real step, not the isolated one, for a margin near 18%.
+MAX_ATTENTION = 500_000
 
 
 class Variants(Dataset[dict[str, Any]]):

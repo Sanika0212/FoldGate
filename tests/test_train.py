@@ -78,8 +78,10 @@ def test_a_batch_never_exceeds_the_attention_budget() -> None:
     lengths = np.concatenate([np.full(400, 86), np.full(400, 180), np.full(400, 286)])
     sampler = LengthGrouped(lengths, batch_size=32, seed=0)
     batches = sampler.batches()
-    # Measured: a batch at this budget peaks near 3.3 GiB against a 4.74 GiB Metal cap.
-    assert MAX_ATTENTION == 650_000
+    # Measured: a real training step at this budget peaks near 3.9 GiB against a 4.74 GiB
+    # cap. The isolated forward and backward is about 1.35 times smaller, which is why an
+    # earlier budget set from that figure alone was too generous.
+    assert MAX_ATTENTION == 500_000
     for batch in batches:
         width = int(max(lengths[i] for i in batch))
         assert len(batch) * width * width <= MAX_ATTENTION

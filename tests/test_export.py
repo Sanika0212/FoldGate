@@ -34,7 +34,7 @@ def trained(dataset_root: Path) -> tuple[Any, Any, Any]:
     v["zero_shot"] = zero_shot(
         assay.wild_type, v["position"].to_numpy(), v["wt"].to_numpy(), v["mt"].to_numpy()
     )
-    module = fit(v, TrainConfig(epochs=1, batch_size=16, accelerator="cpu", precision="32-true"))
+    module = fit(v, TrainConfig(epochs=1, batch_size=16, accelerator="cpu"))
     return module, assay, v
 
 

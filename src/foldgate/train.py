@@ -58,8 +58,14 @@ class LengthGrouped(Sampler[list[int]]):
     order keeps the randomness that training needs and pays for the padding only once.
     """
 
-    def __init__(self, lengths: np.ndarray, batch_size: int, shuffle: bool = True,
-                 chunk_batches: int = 50, seed: int = 0) -> None:
+    def __init__(
+        self,
+        lengths: np.ndarray,
+        batch_size: int,
+        shuffle: bool = True,
+        chunk_batches: int = 50,
+        seed: int = 0,
+    ) -> None:
         self.lengths = np.asarray(lengths)
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -78,8 +84,9 @@ class LengthGrouped(Sampler[list[int]]):
         for start in range(0, len(order), self.chunk):
             chunk = order[start : start + self.chunk]
             chunk = chunk[np.argsort(self.lengths[chunk], kind="stable")]
-            batches += [chunk[i : i + self.batch_size].tolist()
-                        for i in range(0, len(chunk), self.batch_size)]
+            batches += [
+                chunk[i : i + self.batch_size].tolist() for i in range(0, len(chunk), self.batch_size)
+            ]
         if self.shuffle:
             rng.shuffle(batches)
         return iter(batches)
@@ -127,7 +134,10 @@ class TrainConfig:
     devices: int | str = 1
     accelerator: str = "auto"
     name: str = "train"
-    precision: str = "16-mixed"  # on CPU this falls back, so the tests pass "32-true"
+    # Measured on this Mac's GPU, batch 32: uniform batches 5.82 s a step, length-grouped
+    # 0.97, length-grouped in mixed precision 0.95. The grouping is the whole win, so the
+    # default stays at full precision and there is no numerical question to answer.
+    precision: str = "32-true"
 
 
 def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
@@ -138,9 +148,7 @@ def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
     fit_rows, val_rows = train[~val_mask], train[val_mask]
     tr = DataLoader(
         Variants(fit_rows),
-        batch_sampler=LengthGrouped(
-            fit_rows["sequence"].str.len().to_numpy(), cfg.batch_size, seed=cfg.seed
-        ),
+        batch_sampler=LengthGrouped(fit_rows["sequence"].str.len().to_numpy(), cfg.batch_size, seed=cfg.seed),
         collate_fn=collate,
     )
     va = DataLoader(

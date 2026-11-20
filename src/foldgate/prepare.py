@@ -55,15 +55,19 @@ def pooled(
     assays: dict[str, Assay], ids: list[str], scheme: str = "random", seed: int = 0, cache: Path | None = None
 ) -> pd.DataFrame:
     """Variants of several assays in one frame, each tagged with its split."""
-    zs = zero_shot_frame(assays, cache=cache).set_index(["dms_id", "mutant"])["zero_shot"]
+    zs = zero_shot_frame(assays, cache=cache)
     frames = []
     for dms_id in ids:
         assay = assays[dms_id]
         v = assay.variants.copy()
         v["dms_id"] = dms_id
         v["split"] = split(assay, scheme, seed).to_numpy()
-        v["zero_shot"] = [float(zs.loc[(dms_id, m)]) for m in v["mutant"]]
-        frames.append(v)
+        # One merge per assay, not one index lookup per variant: there are tens of thousands.
+        merged = v.merge(zs[zs["dms_id"] == dms_id][["mutant", "zero_shot"]], on="mutant", how="left")
+        if merged["zero_shot"].isna().any():
+            missing = int(merged["zero_shot"].isna().sum())
+            raise KeyError(f"{missing} variants of {dms_id} are not in the zero-shot cache")
+        frames.append(merged)
     return pd.concat(frames, ignore_index=True)
 
 

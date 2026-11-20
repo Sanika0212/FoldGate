@@ -109,3 +109,32 @@ def test_len_agrees_with_the_batches_it_will_serve() -> None:
     lengths = np.random.default_rng(1).integers(86, 287, size=700)
     sampler = LengthGrouped(lengths, batch_size=32, seed=0)
     assert len(sampler) == len(list(iter(sampler)))
+
+
+def test_predict_gives_the_same_scores_whether_or_not_embeddings_are_asked_for() -> None:
+    """With embeddings the backbone runs once and the head reads its output, instead of
+    running the backbone twice. The scores have to be identical or that is not the same
+    model: `embed` returns exactly the representation `forward` feeds to the head."""
+    import numpy as np
+    import pandas as pd
+    import torch
+
+    from foldgate.train import Module, predict
+
+    rng = np.random.default_rng(0)
+    rows = pd.DataFrame(
+        {
+            "sequence": ["M" * n for n in rng.integers(20, 40, size=24)],
+            "position": rng.integers(1, 18, size=24),
+            "zero_shot": rng.normal(size=24).astype(np.float32),
+            "z": rng.normal(size=24).astype(np.float32),
+        }
+    )
+    torch.manual_seed(0)
+    module = Module()
+    plain, none_returned = predict(module, rows, batch_size=8)
+    with_embeddings, embeddings = predict(module, rows, batch_size=8, embeddings=True)
+    assert none_returned is None
+    assert embeddings is not None
+    assert embeddings.shape[0] == 24
+    assert np.allclose(plain, with_embeddings, atol=1e-5)

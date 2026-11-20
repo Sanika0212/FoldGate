@@ -253,23 +253,37 @@ def fit(train: pd.DataFrame, cfg: TrainConfig, logger: Any = None) -> Module:
 def predict(
     module: Module, df: pd.DataFrame, batch_size: int = 64, embeddings: bool = False
 ) -> tuple[np.ndarray, np.ndarray | None]:
+    """Score every row, in the caller's order, inside the same attention budget as training.
+
+    Rows are scored in length order so padding is paid once, which means the last batches are
+    all the longest proteins. At a fixed batch size that is the most expensive batch in the
+    set: 64 sequences of 286 residues is 5.2M attention entries, twice the training batch that
+    already exceeded the Metal cap. Inference carries no backward pass, so it is cheaper per
+    entry, but the shape of the risk is the same and the budget costs almost nothing here.
+    """
     from foldgate.model import device
 
     dev = device()
     module = module.to(dev).eval()
-    order = np.argsort(df["sequence"].str.len().to_numpy(), kind="stable")
+    lengths = df["sequence"].str.len().to_numpy()
+    order = np.argsort(lengths, kind="stable")
+    sampler = LengthGrouped(lengths[order], batch_size, shuffle=False, max_attention=MAX_ATTENTION)
     loader = DataLoader(
         Variants(df.iloc[order]),
-        batch_size=batch_size,
+        batch_sampler=sampler,
         collate_fn=Collate(module.hparams["backbone"]),
     )
     preds, embs = [], []
     for batch in loader:
         batch = {k: v.to(dev) for k, v in batch.items()}
-        preds.append(module(batch).float().cpu().numpy())
         if embeddings:
+            # One pass through the backbone, not two: the head reads the same embedding.
             e = module.net.embed(batch["input_ids"], batch["attention_mask"], batch["position"])
+            scored = module.net.head(torch.cat([e, batch["zero_shot"].unsqueeze(-1)], dim=-1))
+            preds.append(scored.squeeze(-1).float().cpu().numpy())
             embs.append(e.float().cpu().numpy())
+        else:
+            preds.append(module(batch).float().cpu().numpy())
     # Scoring went in length order; the caller gets its own order back.
     inverse = np.empty(len(order), dtype=int)
     inverse[order] = np.arange(len(order))

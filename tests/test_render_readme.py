@@ -110,6 +110,24 @@ def serving_payload(on_p95: float = 625.0, on_throughput: float = 200.0) -> dict
             row("off", "warm", 900.0, 140.0),
             row("on", "cold", on_p95 * 2, on_throughput / 2),
         ],
+        "warm": {
+            "on": {
+                "repeats": 3,
+                "p95_ms_median": on_p95,
+                "p95_ms_min": on_p95 * 0.9,
+                "p95_ms_max": on_p95 * 1.2,
+                "median_ms_median": on_p95 / 2,
+                "throughput_variants_per_s_median": on_throughput,
+            },
+            "off": {
+                "repeats": 3,
+                "p95_ms_median": 900.0,
+                "p95_ms_min": 850.0,
+                "p95_ms_max": 980.0,
+                "median_ms_median": 450.0,
+                "throughput_variants_per_s_median": 140.0,
+            },
+        },
         "batching_p95_ratio": 900.0 / on_p95,
         "ab": {"arms": {"champion": 50, "candidate": 14}, "expected_candidate_share": 0.2},
         "shadow": {"median_ms": 430.0, "comparisons": 64},
@@ -178,6 +196,14 @@ def test_serving_reports_batching_as_a_gain_when_it_is_one() -> None:
     body = load_module().RENDER["SERVING"](serving_payload())
     assert "divides p95 by 1.44" in body
     assert "slower" not in body
+
+
+def test_serving_shows_the_spread_of_the_repeats() -> None:
+    """One draw of this load test varied by more than 2x, so the range has to be visible."""
+    body = load_module().RENDER["SERVING"](serving_payload())
+    assert "of 3 warm runs" in body
+    assert "562 to 750" in body  # the on-batching p95 spread
+    assert "850 to 980" in body
 
 
 def test_serving_calls_batching_a_slowdown_when_that_is_what_was_measured() -> None:

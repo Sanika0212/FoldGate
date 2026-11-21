@@ -50,8 +50,15 @@ def main() -> None:
     train = json.loads(Path(f"runs/train-{args.scheme}/results.json").read_text())
     serving_path = Path(f"runs/serving-{args.scheme}/results.json")
     serving = json.loads(serving_path.read_text()) if serving_path.exists() else {}
-    warm = [m for m in serving.get("measurements", []) if m["batching"] == "on" and m["cache"] == "warm"]
-    p95_ms = float(warm[0]["p95_ms"]) if warm else 0.0
+    # The median of the repeated warm runs, not the first of them: p95 on this laptop moves
+    # by more than a factor of two between runs, so one draw could pass or fail the SLO by
+    # itself. Falls back to the raw rows for a results file written before repeats existed.
+    warm_summary = serving.get("warm", {}).get("on", {})
+    if warm_summary:
+        p95_ms = float(warm_summary["p95_ms_median"])
+    else:
+        warm = [m for m in serving.get("measurements", []) if m["batching"] == "on" and m["cache"] == "warm"]
+        p95_ms = float(np.median([float(m["p95_ms"]) for m in warm])) if warm else 0.0
     onnx_dir = art / "onnx" if (art / "onnx").exists() else None
 
     zs = np.asarray(train["baseline_mean_spearman"].get("zero_shot", 0.0))

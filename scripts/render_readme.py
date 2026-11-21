@@ -209,7 +209,7 @@ def gate(data: dict[str, Any]) -> str:
 
 def serving(data: dict[str, Any]) -> str:
     load = data["load"]
-    warm = [m for m in data["measurements"] if m["cache"] == "warm"]
+    summary = data.get("warm", {})
     lines = [
         "## Serving",
         "",
@@ -218,28 +218,34 @@ def serving(data: dict[str, Any]) -> str:
         "",
         f"The router is driven in-process through ASGI with {load['clients']} concurrent",
         f"clients sending {load['variants_per_request']} variants per request. Latency is a",
-        "property of that workload, not of the model alone.",
+        "property of that workload, not of the model alone. Every figure below is the median",
+        f"of {summary.get('on', {}).get('repeats', 1)} warm runs, with the spread beside it,",
+        "because a single run of this on a laptop moves by more than a factor of two.",
         "",
-        "| batching | median ms | p95 ms | variants per second |",
-        "| --- | --- | --- | --- |",
+        "| batching | median ms | p95 ms | p95 spread | variants per second |",
+        "| --- | --- | --- | --- | --- |",
     ]
-    for m in sorted(warm, key=lambda m: m["batching"]):
+    for label in ("off", "on"):
+        m = summary.get(label)
+        if not m:
+            continue
         lines.append(
-            f"| {m['batching']} | {m['median_ms']:.1f} | {m['p95_ms']:.1f} | "
-            f"{m['throughput_variants_per_s']:.0f} |"
+            f"| {label} | {m['median_ms_median']:.1f} | {m['p95_ms_median']:.1f} | "
+            f"{m['p95_ms_min']:.0f} to {m['p95_ms_max']:.0f} | "
+            f"{m['throughput_variants_per_s_median']:.0f} |"
         )
-    on = next((m for m in warm if m["batching"] == "on"), None)
-    off = next((m for m in warm if m["batching"] == "off"), None)
+    on, off = summary.get("on"), summary.get("off")
     lines.append("")
     if on and off:
-        ratio = float(off["p95_ms"]) / float(on["p95_ms"])
+        ratio = float(off["p95_ms_median"]) / float(on["p95_ms_median"])
+        tput = float(off["throughput_variants_per_s_median"]) / float(on["throughput_variants_per_s_median"])
         if ratio >= 1:
             lines.append(f"Dynamic batching divides p95 by {ratio:.2f}.")
         else:
             lines.append(
                 f"Dynamic batching makes this workload {1 / ratio:.1f} times slower at p95, "
-                f"and {float(off['throughput_variants_per_s']) / float(on['throughput_variants_per_s']):.1f} "
-                "times slower on throughput. That is the measurement, and the reason is the "
+                f"and {tput:.1f} times slower on throughput. That is the measurement, and "
+                "the reason is the "
                 "device: these graphs run on CPU, where one request for eight variants already "
                 "uses every core. Gathering eight of them into one pass replaces eight parallel "
                 "scorings with a single sequential one and adds the batching window on top. "

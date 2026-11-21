@@ -37,6 +37,10 @@ CLIENTS = 8
 VARIANTS_PER_REQUEST = 8
 REQUESTS_PER_CLIENT = 8
 PARITY_TOLERANCE = 1e-3
+# The warm load test is repeated because one draw of it is not a measurement. Observed by
+# hand on this laptop: p95 with batching on moved between 809 and 1897 ms over three runs
+# while the unbatched figure stayed near 650. The median of REPEATS is what gets reported.
+REPEATS = 3
 
 
 def model_version(
@@ -145,16 +149,34 @@ def main() -> None:
     experiments = [f"lab-{i}" for i in range(40)]
 
     measurements = []
+    summary = {}
     for batching in (True, False):
         app = create_app(champion, batching=batching)
         label = "on" if batching else "off"
         cold = asyncio.run(drive(app, protein, variants, label, experiments))
-        warm = asyncio.run(drive(app, protein, variants, label, experiments))
-        cold["cache"], warm["cache"] = "cold", "warm"
-        measurements += [cold, warm]
+        cold["cache"], cold["repeat"] = "cold", 0
+        warms = []
+        for repeat in range(1, REPEATS + 1):
+            warm = asyncio.run(drive(app, protein, variants, label, experiments))
+            warm["cache"], warm["repeat"] = "warm", repeat
+            warms.append(warm)
+        measurements += [cold, *warms]
+        p95s = sorted(float(w["p95_ms"]) for w in warms)
+        tputs = sorted(float(w["throughput_variants_per_s"]) for w in warms)
+        summary[label] = {
+            "repeats": REPEATS,
+            "p95_ms_median": float(np.median(p95s)),
+            "p95_ms_min": p95s[0],
+            "p95_ms_max": p95s[-1],
+            "median_ms_median": float(np.median([float(w["median_ms"]) for w in warms])),
+            "throughput_variants_per_s_median": float(np.median(tputs)),
+        }
+        got = summary[label]
         print(
-            f"batching {label:>3} cache {warm['cache']}: median {warm['median_ms']:.1f} ms  "
-            f"p95 {warm['p95_ms']:.1f} ms  {warm['throughput_variants_per_s']:.0f} variants/s"
+            f"batching {label:>3} warm, median of {REPEATS}: median "
+            f"{got['median_ms_median']:.1f} ms  p95 {got['p95_ms_median']:.1f} ms "
+            f"(spread {got['p95_ms_min']:.0f} to {got['p95_ms_max']:.0f})  "
+            f"{got['throughput_variants_per_s_median']:.0f} variants/s"
         )
 
     ab_app = create_app(champion, candidate, candidate_share=0.2)
@@ -170,8 +192,6 @@ def main() -> None:
         f"shadow: median {shadow['median_ms']:.1f} ms, {sum(1 for _ in shadow_log.open())} comparisons logged"
     )
 
-    warm_on = next(m for m in measurements if m["batching"] == "on" and m["cache"] == "warm")
-    warm_off = next(m for m in measurements if m["batching"] == "off" and m["cache"] == "warm")
     payload = {
         "scheme": args.scheme,
         "backbone": args.backbone,
@@ -184,8 +204,9 @@ def main() -> None:
             "requests_per_client": REQUESTS_PER_CLIENT,
         },
         "measurements": measurements,
+        "warm": summary,
         # Above 1 means batching helps. Measured below 1 on this CPU: see the README.
-        "batching_p95_ratio": warm_off["p95_ms"] / warm_on["p95_ms"],
+        "batching_p95_ratio": summary["off"]["p95_ms_median"] / summary["on"]["p95_ms_median"],
         "ab": {"arms": ab["arms"], "expected_candidate_share": expected},
         "shadow": {"median_ms": shadow["median_ms"], "comparisons": sum(1 for _ in shadow_log.open())},
         "calibration": calibration,

@@ -274,6 +274,10 @@ def lightning_callback(
             self.waited = 0.0
             self.pool = 0.0
             self.peak_pool = 0.0
+            # The duty cycle counts from the start of the run, so an epoch's own share has
+            # to be taken as a difference. Reporting the running total under an epoch's
+            # heading reads as though each epoch were slower than the last.
+            self.at_epoch_start = (0.0, 0.0)
 
         def on_train_batch_start(self, *_: Any, **__: Any) -> None:
             if minimum and self.batches % every == 0:
@@ -309,9 +313,14 @@ def lightning_callback(
             )
 
         def on_train_epoch_end(self, trainer: Any, _module: Any) -> None:
+            worked = self.cycle.worked - self.at_epoch_start[0]
+            paused = self.cycle.paused - self.at_epoch_start[1]
+            self.at_epoch_start = (self.cycle.worked, self.cycle.paused)
             print(
-                f"  epoch {trainer.current_epoch}: worked {self.cycle.worked / 60:.1f} min, "
-                f"paused {self.cycle.paused / 60:.1f} min, duty {self.cycle.share:.0%}",
+                f"  epoch {trainer.current_epoch}: worked {worked / 60:.1f} min, "
+                f"paused {paused / 60:.1f} min "
+                f"(run so far {self.cycle.worked / 60:.1f} min worked, "
+                f"duty {self.cycle.share:.0%}, GPU peak {self.peak_pool:.1f} GiB)",
                 flush=True,
             )
 

@@ -245,8 +245,8 @@ def serving(data: dict[str, Any]) -> str:
             "eight parallel scorings with a single sequential one and adds the batching window "
             "on top. Dynamic batching pays off where a single request leaves the accelerator "
             "idle, which is true of a GPU and is not true here. It is left in the router, off "
-            "by default for this deployment, because the right setting is a property of the "
-            "hardware rather than of the code."
+            "by default in the serve command, which is the deployment these numbers came "
+            "from, and available behind --batching for hardware where it pays."
         )
         overlap = float(on["p95_ms_max"]) >= float(off["p95_ms_min"]) and float(off["p95_ms_max"]) >= float(
             on["p95_ms_min"]
@@ -282,9 +282,10 @@ def serving(data: dict[str, Any]) -> str:
         lines.append("")
     lines += [
         f"The A/B split sent {data['ab']['expected_candidate_share']:.0%} of experiments to the "
-        f"candidate against a configured 20%, which is what a hash over {len(data['ab']['arms'])} "
-        "arms and a few dozen experiments gives: the assignment is stable per experiment rather "
-        "than balanced per request. Shadow scoring stayed off the response path at a median of "
+        "candidate against a configured 20%, which is what hashing a few dozen experiment "
+        "names gives: the assignment is stable per experiment rather than balanced per "
+        "request, so a small number of experiments does not land on the nominal share. "
+        "Shadow scoring stayed off the response path at a median of "
         f"{data['shadow']['median_ms']:.1f} ms with "
         f"{data['shadow']['comparisons']:,} comparisons logged.",
         "",

@@ -78,7 +78,10 @@ def main(argv: list[str] | None = None) -> None:
     sv.add_argument("--scheme", default="random", choices=["random", "contiguous"])
     sv.add_argument("--port", type=int, default=8080)
     sv.add_argument("--host", default="127.0.0.1", help="0.0.0.0 in a container")
-    sv.add_argument("--no-batching", action="store_true")
+    # Off unless asked for. Measured on this CPU with eight concurrent clients: batching
+    # cost 1.3 times the throughput and did not improve p95, whose repeat ranges overlapped.
+    # It earns its keep where one request leaves the device idle, which a GPU does.
+    sv.add_argument("--batching", action="store_true", help="gather concurrent requests")
     args = ap.parse_args(argv)
 
     if args.command == "download":
@@ -111,7 +114,7 @@ def main(argv: list[str] | None = None) -> None:
             candidate,
             candidate_share=share,
             shadow=shadow,
-            batching=not args.no_batching,
+            batching=args.batching,
             max_batch=int(os.environ.get("FOLDGATE_MAX_BATCH", "64")),
             max_wait_ms=float(os.environ.get("FOLDGATE_MAX_WAIT_MS", "8")),
         )

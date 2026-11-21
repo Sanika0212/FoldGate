@@ -1,0 +1,98 @@
+{
+  "scheme": "random",
+  "slo_ms": 3000.0,
+  "target_coverage": 0.9,
+  "candidates": {
+    "lora-conformal": {
+      "metrics": {
+        "spearman": 0.6183599821667305,
+        "spearman_pooled": 0.695830141830938,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.8826249724730235,
+        "target_coverage": 0.9,
+        "mean_width": 2.2886231565440838,
+        "p95_ms": 832.0618731979266
+      },
+      "gate": {
+        "passed": true,
+        "reasons": [],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.6183599821667305,
+        "spearman_pooled": 0.695830141830938,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.8826249724730235,
+        "target_coverage": 0.9,
+        "mean_width": 2.2886231565440838,
+        "p95_ms": 832.0618731979266
+      },
+      "registry": {
+        "run_id": "452ad7e47d63412ea3cf1175ff905433",
+        "version": 1,
+        "champion": true
+      }
+    },
+    "lora-narrow-intervals": {
+      "metrics": {
+        "spearman": 0.6183599821667305,
+        "spearman_pooled": 0.695830141830938,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.6795859942743889,
+        "target_coverage": 0.9,
+        "mean_width": 1.2793601642160801,
+        "p95_ms": 832.0618731979266
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "coverage 0.680 is outside 0.90 +/- 0.02"
+        ],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.6183599821667305,
+        "spearman_pooled": 0.695830141830938,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.6795859942743889,
+        "target_coverage": 0.9,
+        "mean_width": 1.2793601642160801,
+        "p95_ms": 832.0618731979266
+      },
+      "registry": {
+        "run_id": "4566d4f98292455999f88e50558799ec",
+        "version": 2,
+        "champion": false
+      }
+    },
+    "zero-shot-only": {
+      "metrics": {
+        "spearman": 0.28297768934141554,
+        "spearman_pooled": 0.3175554234239202,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.8978198634661969,
+        "target_coverage": 0.9,
+        "mean_width": 4.454731106643721,
+        "p95_ms": 832.0618731979266
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "Spearman 0.283 does not beat zero-shot 0.283"
+        ],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.28297768934141554,
+        "spearman_pooled": 0.3175554234239202,
+        "spearman_zero_shot": 0.28297768934141554,
+        "coverage": 0.8978198634661969,
+        "target_coverage": 0.9,
+        "mean_width": 4.454731106643721,
+        "p95_ms": 832.0618731979266
+      },
+      "registry": {
+        "run_id": "c67a3d0275cd4c7dac3861d594a766bb",
+        "version": 3,
+        "champion": false
+      }
+    }
+  }
+}

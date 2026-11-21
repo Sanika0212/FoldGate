@@ -1,0 +1,150 @@
+{
+  "scheme": "random",
+  "alpha": 0.1,
+  "q_plain": 1.1423671245574951,
+  "q_normalized": 3.378386849874243,
+  "label_budgets": [
+    25,
+    50,
+    100,
+    200
+  ],
+  "draws": 20,
+  "assays": {
+    "SYUA_HUMAN_Newberry_2020": {
+      "n": 2497,
+      "spearman_model": 0.22186637128932377,
+      "spearman_zero_shot": 0.13430211298825573,
+      "ndcg_top10_model": 0.8490730627196119,
+      "ndcg_top10_zero_shot": 0.8024859339336403,
+      "coverage_plain": 0.8510212254705647,
+      "coverage_normalized": 0.8237885462555066,
+      "mmd": 0.18913525342941284,
+      "mmd_p_value": 0.004975124378109453,
+      "evidently": {
+        "available": true,
+        "html": "runs/shift-random/SYUA_HUMAN_Newberry_2020.html",
+        "share_of_columns_drifted": 1.0,
+        "k_s_p_values": {
+          "prediction": 0.29521833705533335,
+          "embedding_norm": 1.4959788203158537,
+          "embedding_mean": 0.392643860102236,
+          "embedding_std": 1.497133142863452,
+          "embedding_pc0": 0.23895089413036233
+        }
+      },
+      "recalibrated": {
+        "25": {
+          "coverage": 0.9711569579288026,
+          "coverage_sd": 0.02033430030815195,
+          "width": 5.542371403897706
+        },
+        "50": {
+          "coverage": 0.9255006129955048,
+          "coverage_sd": 0.028948304818110126,
+          "width": 3.489664281413939
+        },
+        "100": {
+          "coverage": 0.9152690863579475,
+          "coverage_sd": 0.02934019347012477,
+          "width": 3.223123093039238
+        },
+        "200": {
+          "coverage": 0.9025250326512844,
+          "coverage_sd": 0.022997838592852798,
+          "width": 2.9482765872477374
+        }
+      }
+    },
+    "TPMT_HUMAN_Matreyek_2018": {
+      "n": 3648,
+      "spearman_model": 0.4691387187662703,
+      "spearman_zero_shot": 0.4191778225071432,
+      "ndcg_top10_model": 0.7990253451408105,
+      "ndcg_top10_zero_shot": 0.7715509824762313,
+      "coverage_plain": 0.8374451754385965,
+      "coverage_normalized": 0.7826206140350878,
+      "mmd": 0.035224199295043945,
+      "mmd_p_value": 0.004975124378109453,
+      "evidently": {
+        "available": true,
+        "html": "runs/shift-random/TPMT_HUMAN_Matreyek_2018.html",
+        "share_of_columns_drifted": 1.0,
+        "k_s_p_values": {
+          "prediction": 0.15857572968953704,
+          "embedding_norm": 0.2548675793223239,
+          "embedding_mean": 0.48975434815875446,
+          "embedding_std": 0.25353499916972627,
+          "embedding_pc0": 0.6613082656524047
+        }
+      },
+      "recalibrated": {
+        "25": {
+          "coverage": 0.9752139111233784,
+          "coverage_sd": 0.020323467409603026,
+          "width": 5.4589558740733235
+        },
+        "50": {
+          "coverage": 0.9285158421345192,
+          "coverage_sd": 0.03850174399233141,
+          "width": 3.722323086131663
+        },
+        "100": {
+          "coverage": 0.9059188275084555,
+          "coverage_sd": 0.025744951945675564,
+          "width": 3.2453645058096354
+        },
+        "200": {
+          "coverage": 0.8982308584686777,
+          "coverage_sd": 0.023059288638718388,
+          "width": 3.127546486232674
+        }
+      }
+    },
+    "UBC9_HUMAN_Weile_2017": {
+      "n": 2563,
+      "spearman_model": 0.18557246705742597,
+      "spearman_zero_shot": -0.0004418351700760456,
+      "ndcg_top10_model": 0.4692255447649817,
+      "ndcg_top10_zero_shot": 0.38980655315539764,
+      "coverage_plain": 0.7815060476004682,
+      "coverage_normalized": 0.7179087007413187,
+      "mmd": 0.21046525239944458,
+      "mmd_p_value": 0.004975124378109453,
+      "evidently": {
+        "available": true,
+        "html": "runs/shift-random/UBC9_HUMAN_Weile_2017.html",
+        "share_of_columns_drifted": 1.0,
+        "k_s_p_values": {
+          "prediction": 0.465943847163556,
+          "embedding_norm": 2.170845490147401,
+          "embedding_mean": 0.5670926778638984,
+          "embedding_std": 2.170783769640208,
+          "embedding_pc0": 0.32280320019338
+        }
+      },
+      "recalibrated": {
+        "25": {
+          "coverage": 0.9635342789598109,
+          "coverage_sd": 0.02589748974056712,
+          "width": 5.839457422057583
+        },
+        "50": {
+          "coverage": 0.9184042976522087,
+          "coverage_sd": 0.037902873561404676,
+          "width": 3.9435694375493506
+        },
+        "100": {
+          "coverage": 0.9039179861956963,
+          "coverage_sd": 0.03558623126843766,
+          "width": 3.66130424100378
+        },
+        "200": {
+          "coverage": 0.9053110452814218,
+          "coverage_sd": 0.024777047792482746,
+          "width": 3.6201647579453784
+        }
+      }
+    }
+  }
+}

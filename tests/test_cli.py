@@ -67,11 +67,11 @@ def test_serve_builds_the_app_and_hands_it_to_uvicorn(monkeypatch: pytest.Monkey
             {"run": staticmethod(lambda app, host, port: calls.update(app=app, host=host, port=port))},
         ),
     )
-    cli.main(["serve", "--scheme", "contiguous", "--port", "9123", "--no-batching"])
+    cli.main(["serve", "--scheme", "contiguous", "--port", "9123", "--batching"])
     assert calls["port"] == 9123
     assert calls["app"]["champion"] == "version-contiguous"
     assert calls["app"]["candidate"] is None
-    assert calls["app"]["batching"] is False
+    assert calls["app"]["batching"] is True
 
 
 def test_serve_picks_up_the_deployment_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -103,6 +103,8 @@ def test_serve_picks_up_the_deployment_environment(monkeypatch: pytest.MonkeyPat
     assert app["shadow"] is True
     assert app["max_batch"] == 128
     assert app["max_wait_ms"] == 15.0
+    # Batching is opt-in: it cost throughput and bought no tail latency on this CPU.
+    assert app["batching"] is False
 
 
 def test_version_dir_prefers_the_mounted_artifacts(monkeypatch: pytest.MonkeyPatch) -> None:

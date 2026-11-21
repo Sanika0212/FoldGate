@@ -182,3 +182,21 @@ def test_releasing_the_cache_survives_a_torch_without_metal(
     no_metal = SimpleNamespace(backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)))
     monkeypatch.setitem(sys.modules, "torch", no_metal)
     assert thermal.release_cache() == 0.0
+
+
+def test_waiting_for_the_gpu_is_safe_without_metal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The throttle runs on machines with no Metal, where this has to be a no-op."""
+    import sys
+    from types import SimpleNamespace
+
+    import foldgate.thermal as thermal
+
+    no_metal = SimpleNamespace(backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)))
+    monkeypatch.setitem(sys.modules, "torch", no_metal)
+    assert thermal.wait_for_gpu() is None
+
+
+def test_waiting_for_the_gpu_does_not_raise_on_this_machine() -> None:
+    from foldgate.thermal import wait_for_gpu
+
+    assert wait_for_gpu() is None

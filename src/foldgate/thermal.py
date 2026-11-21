@@ -165,6 +165,24 @@ def limit_threads(threads: int = DEFAULT_THREADS) -> None:
         pass  # interop threads can only be set once per process
 
 
+def wait_for_gpu() -> None:
+    """Block until the GPU has finished the work already submitted to it.
+
+    Metal runs asynchronously: a training step returns once its work is queued, not once the
+    work is done. A timer around the step therefore measures submission, and a duty cycle
+    built on that timer idles the CPU while the GPU is still busy with the batch it just
+    received, which is not a duty cycle at all. Synchronizing first makes the measurement and
+    the pause mean what they say.
+    """
+    try:
+        import torch
+
+        if torch.backends.mps.is_available():
+            torch.mps.synchronize()
+    except (ImportError, AttributeError, RuntimeError):
+        pass
+
+
 def release_cache() -> float:
     """Hand cached GPU blocks back, and report the pool size in GiB before doing it.
 
@@ -286,6 +304,8 @@ def lightning_callback(
             self.cycle.begin()
 
         def on_train_batch_end(self, trainer: Any, *_: Any, **__: Any) -> None:
+            # Before the clock stops, or the pause that follows idles nothing.
+            wait_for_gpu()
             self.cycle.end()
             self.batches += 1
             if release_every and self.batches % release_every == 0:

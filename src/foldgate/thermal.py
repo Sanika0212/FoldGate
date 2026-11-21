@@ -165,6 +165,18 @@ def limit_threads(threads: int = DEFAULT_THREADS) -> None:
         pass  # interop threads can only be set once per process
 
 
+def guard(share: float = DEFAULT_MEMORY_SHARE, threads: int = DEFAULT_THREADS) -> None:
+    """Apply the memory ceiling and the thread caps, for scripts that infer without training.
+
+    Training gets this from ``fit()``. Evaluation scripts load a checkpoint and call
+    ``predict()`` directly, which on an unguarded process means every core and no Metal
+    ceiling. Call this before the first allocation: the watermark is read when MPS starts,
+    so setting it afterwards does nothing.
+    """
+    limit_threads(threads)
+    cap_memory(share)
+
+
 def wait_for_gpu() -> None:
     """Block until the GPU has finished the work already submitted to it.
 

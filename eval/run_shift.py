@@ -29,6 +29,7 @@ from common import pooled, write
 
 from foldgate.calibration import conformal_quantile, fit_difficulty, mmd, ndcg_top, spearman
 from foldgate.data import HELD_OUT_FAMILIES, load
+from foldgate.thermal import guard
 from foldgate.train import Module, predict
 
 LABEL_BUDGETS = [25, 50, 100, 200]
@@ -96,6 +97,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
+    guard()
     art = Path("artifacts") / args.scheme
     module = load_module(art / "module.pt")
     saved = np.load(art / "predictions.npz", allow_pickle=True)

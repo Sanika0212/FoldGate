@@ -89,7 +89,9 @@ def gate_payload() -> dict[str, Any]:
     }
 
 
-def serving_payload(on_p95: float = 625.0, on_throughput: float = 200.0) -> dict[str, Any]:
+def serving_payload(
+    on_p95: float = 625.0, on_throughput: float = 200.0, overlap: bool = False
+) -> dict[str, Any]:
     def row(batching: str, cache: str, p95: float, throughput: float) -> dict[str, Any]:
         return {
             "batching": batching,
@@ -114,8 +116,8 @@ def serving_payload(on_p95: float = 625.0, on_throughput: float = 200.0) -> dict
             "on": {
                 "repeats": 3,
                 "p95_ms_median": on_p95,
-                "p95_ms_min": on_p95 * 0.9,
-                "p95_ms_max": on_p95 * 1.2,
+                "p95_ms_min": on_p95 * (1.0 if overlap else 0.97),
+                "p95_ms_max": on_p95 * (2.0 if overlap else 1.03),
                 "median_ms_median": on_p95 / 2,
                 "throughput_variants_per_s_median": on_throughput,
             },
@@ -202,8 +204,21 @@ def test_serving_shows_the_spread_of_the_repeats() -> None:
     """One draw of this load test varied by more than 2x, so the range has to be visible."""
     body = load_module().RENDER["SERVING"](serving_payload())
     assert "of 3 warm runs" in body
-    assert "562 to 750" in body  # the on-batching p95 spread
+    assert "606 to 644" in body  # the on-batching p95 spread
     assert "850 to 980" in body
+
+
+def test_serving_refuses_to_quote_a_ratio_when_the_ranges_overlap() -> None:
+    """Measured: p95 832 ms batched against 843 unbatched, ranges crossing end to end.
+
+    Single runs of the same test put the ratio between 0.26 and 1.01. A ratio of medians
+    taken from overlapping ranges is noise, and the section has to say so instead.
+    """
+    body = load_module().RENDER["SERVING"](serving_payload(on_p95=880.0, overlap=True))
+    assert "cannot be told apart at this sample size" in body
+    assert "Reporting a ratio of the medians would be reporting noise" in body
+    assert "divides p95" not in body
+    assert "times slower at p95" not in body
 
 
 def test_serving_calls_batching_a_slowdown_when_that_is_what_was_measured() -> None:

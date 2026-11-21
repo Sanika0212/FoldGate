@@ -47,6 +47,7 @@ def main() -> None:
     saved = np.load(art / "predictions.npz", allow_pickle=True)
     cal_pred, cal_y, cal_emb = saved["cal_pred"], saved["cal_y"], saved["cal_emb"]
     test_pred, test_y, test_emb = saved["test_pred"], saved["test_y"], saved["test_emb"]
+    test_dms = saved["test_dms"]
     train = json.loads(Path(f"runs/train-{args.scheme}/results.json").read_text())
     serving_path = Path(f"runs/serving-{args.scheme}/results.json")
     serving = json.loads(serving_path.read_text()) if serving_path.exists() else {}
@@ -60,9 +61,6 @@ def main() -> None:
         warm = [m for m in serving.get("measurements", []) if m["batching"] == "on" and m["cache"] == "warm"]
         p95_ms = float(np.median([float(m["p95_ms"]) for m in warm])) if warm else 0.0
     onnx_dir = art / "onnx" if (art / "onnx").exists() else None
-
-    zs = np.asarray(train["baseline_mean_spearman"].get("zero_shot", 0.0))
-    rho_zero_shot = float(zs)
 
     rng = np.random.default_rng(args.seed)
     half = rng.random(len(cal_y)) < 0.5
@@ -80,6 +78,8 @@ def main() -> None:
     # The zero-shot candidate gets its own honest quantile, so it can only fail on accuracy.
     zs_cal, zs_test = zero_shot_candidate(args.scheme, args.seed, cal_y)
     zs_q = conformal_quantile(np.abs(cal_y[~half] - zs_cal[~half]) / sigma_cal, 1 - TARGET)
+    # The bar every candidate clears or does not: zero-shot on these rows, same estimator.
+    rho_zero_shot = mean_spearman(zs_test, test_y, test_dms)
 
     candidates = [
         {
@@ -117,11 +117,12 @@ def main() -> None:
     rows, payload = [], {}
     for c in candidates:
         pred = np.asarray(c["pred"], dtype=np.float32)
-        rho = spearman(pred, test_y)
+        rho = mean_spearman(pred, test_y, test_dms)
         cov = coverage(pred, float(c["q"]))
         verdict = gate(rho, rho_zero_shot, cov, TARGET, p95_ms, SLO_MS, TOLERANCE)
         metrics = {
             "spearman": rho,
+            "spearman_pooled": spearman(pred, test_y),
             "spearman_zero_shot": rho_zero_shot,
             "coverage": cov,
             "target_coverage": TARGET,
@@ -172,6 +173,19 @@ def main() -> None:
             {"scheme": args.scheme, "slo_ms": SLO_MS, "target_coverage": TARGET, "candidates": payload},
         ),
     )
+
+
+def mean_spearman(pred: np.ndarray, y: np.ndarray, dms: np.ndarray) -> float:
+    """Spearman inside each assay, averaged over assays.
+
+    This is the estimator the baselines and the accuracy table use, and the gate has to use
+    it too. Pooling every assay's rows into one correlation gives a larger number, because
+    part of it is "which assay is this row from" rather than "is this variant worse": on
+    this run zero-shot scores 0.318 pooled against 0.283 per assay. The gate compared each
+    candidate's pooled figure against zero-shot's per-assay one and promoted zero-shot
+    dressed up as a model, which is the one candidate it exists to reject.
+    """
+    return float(np.mean([spearman(pred[dms == a], y[dms == a]) for a in np.unique(dms)]))
 
 
 def zero_shot_candidate(scheme: str, seed: int, cal_y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

@@ -239,20 +239,45 @@ def serving(data: dict[str, Any]) -> str:
     if on and off:
         ratio = float(off["p95_ms_median"]) / float(on["p95_ms_median"])
         tput = float(off["throughput_variants_per_s_median"]) / float(on["throughput_variants_per_s_median"])
-        if ratio >= 1:
-            lines.append(f"Dynamic batching divides p95 by {ratio:.2f}.")
+        why = (
+            "The reason is the device: these graphs run on CPU, where one request for eight "
+            "variants already uses every core. Gathering eight of them into one pass replaces "
+            "eight parallel scorings with a single sequential one and adds the batching window "
+            "on top. Dynamic batching pays off where a single request leaves the accelerator "
+            "idle, which is true of a GPU and is not true here. It is left in the router, off "
+            "by default for this deployment, because the right setting is a property of the "
+            "hardware rather than of the code."
+        )
+        overlap = float(on["p95_ms_max"]) >= float(off["p95_ms_min"]) and float(off["p95_ms_max"]) >= float(
+            on["p95_ms_min"]
+        )
+        if overlap:
+            # The honest reading when the ranges cross: a ratio of medians here would be a
+            # number with no evidence behind it. Single runs of this put the ratio anywhere
+            # from 0.26 to 1.01, which is what the repeats were added to expose.
+            lines.append(
+                f"The two p95 figures cannot be told apart at this sample size: "
+                f"{on['p95_ms_median']:.0f} ms against {off['p95_ms_median']:.0f} ms, with "
+                f"ranges of {on['p95_ms_min']:.0f} to {on['p95_ms_max']:.0f} and "
+                f"{off['p95_ms_min']:.0f} to {off['p95_ms_max']:.0f} that overlap along their "
+                "whole length. Reporting a ratio of the medians would be reporting noise. "
+                f"What does separate is the rest of the distribution: median latency "
+                f"{on['median_ms_median']:.0f} ms batched against "
+                f"{off['median_ms_median']:.0f} ms unbatched, and throughput "
+                f"{on['throughput_variants_per_s_median']:.0f} against "
+                f"{off['throughput_variants_per_s_median']:.0f} variants per second. Batching "
+                f"costs {tput:.1f} times the throughput here and buys nothing at the tail. " + why
+            )
+        elif ratio >= 1:
+            lines.append(
+                f"Dynamic batching divides p95 by {ratio:.2f}, from "
+                f"{off['p95_ms_median']:.0f} ms to {on['p95_ms_median']:.0f} ms, with the "
+                "repeat ranges clear of each other."
+            )
         else:
             lines.append(
                 f"Dynamic batching makes this workload {1 / ratio:.1f} times slower at p95, "
-                f"and {tput:.1f} times slower on throughput. That is the measurement, and "
-                "the reason is the "
-                "device: these graphs run on CPU, where one request for eight variants already "
-                "uses every core. Gathering eight of them into one pass replaces eight parallel "
-                "scorings with a single sequential one and adds the batching window on top. "
-                "Dynamic batching pays off where a single request leaves the accelerator idle, "
-                "which is true of a GPU and is not true here. It is left in the router, off by "
-                "default for this deployment, because the right setting is a property of the "
-                "hardware rather than of the code."
+                f"and {tput:.1f} times slower on throughput. That is the measurement. " + why
             )
         lines.append("")
     lines += [

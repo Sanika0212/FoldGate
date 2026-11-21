@@ -114,7 +114,14 @@ def calibration(train: dict[str, Any]) -> str:
             f"{block['split']['width']:.2f} | {block['normalized']['coverage']:.3f} | "
             f"{block['normalized']['width']:.2f} |"
         )
-    worst = min((abs(float(t) - b["split"]["coverage"]), t) for t, b in train["coverage"].items())
+    # The largest miss over both schemes and every target. This was a min() once, reported as
+    # the largest, over the split scheme only, which made the calibration look twice as tight
+    # as it measured.
+    worst = max(
+        (abs(float(t) - b[scheme]["coverage"]), t, scheme)
+        for t, b in train["coverage"].items()
+        for scheme in ("split", "normalized")
+    )
     lines += [
         "",
         "A plain conformal interval is one width for every variant, so it over-covers the easy",
@@ -134,8 +141,9 @@ def calibration(train: dict[str, Any]) -> str:
             )
     lines += [
         "",
-        f"The largest gap between target and achieved coverage is {worst[0]:.3f}, at the "
-        f"{float(worst[1]):.0%} target.",
+        f"The largest gap between target and achieved coverage is {worst[0]:.3f}, by the "
+        f"{worst[2].replace('normalized', 'normalized scheme').replace('split', 'split scheme')} "
+        f"at the {float(worst[1]):.0%} target.",
         "",
     ]
     return "\n".join(lines)
@@ -220,11 +228,32 @@ def serving(data: dict[str, Any]) -> str:
             f"| {m['batching']} | {m['median_ms']:.1f} | {m['p95_ms']:.1f} | "
             f"{m['throughput_variants_per_s']:.0f} |"
         )
+    on = next((m for m in warm if m["batching"] == "on"), None)
+    off = next((m for m in warm if m["batching"] == "off"), None)
+    lines.append("")
+    if on and off:
+        ratio = float(off["p95_ms"]) / float(on["p95_ms"])
+        if ratio >= 1:
+            lines.append(f"Dynamic batching divides p95 by {ratio:.2f}.")
+        else:
+            lines.append(
+                f"Dynamic batching makes this workload {1 / ratio:.1f} times slower at p95, "
+                f"and {float(off['throughput_variants_per_s']) / float(on['throughput_variants_per_s']):.1f} "
+                "times slower on throughput. That is the measurement, and the reason is the "
+                "device: these graphs run on CPU, where one request for eight variants already "
+                "uses every core. Gathering eight of them into one pass replaces eight parallel "
+                "scorings with a single sequential one and adds the batching window on top. "
+                "Dynamic batching pays off where a single request leaves the accelerator idle, "
+                "which is true of a GPU and is not true here. It is left in the router, off by "
+                "default for this deployment, because the right setting is a property of the "
+                "hardware rather than of the code."
+            )
+        lines.append("")
     lines += [
-        "",
-        f"Dynamic batching improves p95 by {data['batching_speedup']:.2f} times. The A/B split",
-        f"sent {data['ab']['expected_candidate_share']:.0%} of experiments to the candidate,",
-        f"and shadow scoring stayed off the response path at a median of "
+        f"The A/B split sent {data['ab']['expected_candidate_share']:.0%} of experiments to the "
+        f"candidate against a configured 20%, which is what a hash over {len(data['ab']['arms'])} "
+        "arms and a few dozen experiments gives: the assignment is stable per experiment rather "
+        "than balanced per request. Shadow scoring stayed off the response path at a median of "
         f"{data['shadow']['median_ms']:.1f} ms with "
         f"{data['shadow']['comparisons']:,} comparisons logged.",
         "",

@@ -89,15 +89,15 @@ def gate_payload() -> dict[str, Any]:
     }
 
 
-def serving_payload() -> dict[str, Any]:
-    def row(batching: str, cache: str) -> dict[str, Any]:
+def serving_payload(on_p95: float = 625.0, on_throughput: float = 200.0) -> dict[str, Any]:
+    def row(batching: str, cache: str, p95: float, throughput: float) -> dict[str, Any]:
         return {
             "batching": batching,
             "cache": cache,
             "requests": 64,
-            "median_ms": 420.0,
-            "p95_ms": 900.0,
-            "throughput_variants_per_s": 140.0,
+            "median_ms": p95 / 2,
+            "p95_ms": p95,
+            "throughput_variants_per_s": throughput,
         }
 
     return {
@@ -105,8 +105,12 @@ def serving_payload() -> dict[str, Any]:
         "parity_tolerance": 1e-3,
         "onnx_bytes": {"regressor.onnx": 1},
         "load": {"clients": 8, "variants_per_request": 8, "requests_per_client": 8},
-        "measurements": [row("on", "warm"), row("off", "warm"), row("on", "cold")],
-        "batching_speedup": 1.44,
+        "measurements": [
+            row("on", "warm", on_p95, on_throughput),
+            row("off", "warm", 900.0, 140.0),
+            row("on", "cold", on_p95 * 2, on_throughput / 2),
+        ],
+        "batching_p95_ratio": 900.0 / on_p95,
         "ab": {"arms": {"champion": 50, "candidate": 14}, "expected_candidate_share": 0.2},
         "shadow": {"median_ms": 430.0, "comparisons": 64},
     }
@@ -147,6 +151,41 @@ def test_the_gate_section_gives_a_reason_for_every_rejection() -> None:
     body = load_module().RENDER["GATE"](gate_payload())
     assert "rejected" in body
     assert "coverage 0.710 is outside" in body
+
+
+def test_calibration_reports_the_largest_miss_not_the_smallest() -> None:
+    """This line took a min() and called it the largest, over one scheme of the two."""
+    module = load_module()
+    payload = train_payload()
+    payload["coverage"] = {
+        "0.90": {
+            "split": {"coverage": 0.880, "width": 2.0, "terciles": [0.9, 0.88, 0.86]},
+            "normalized": {"coverage": 0.860, "width": 2.1, "terciles": [0.84, 0.86, 0.88]},
+        },
+        "0.95": {
+            "split": {"coverage": 0.948, "width": 3.0, "terciles": [0.96, 0.95, 0.94]},
+            "normalized": {"coverage": 0.951, "width": 3.1, "terciles": [0.94, 0.95, 0.96]},
+        },
+    }
+    body = module.RENDER["CALIBRATION"](payload)
+    # 0.90 normalized misses by 0.040; the smallest miss is 0.001 and the largest split-only
+    # miss is 0.020. Only the first is the largest gap.
+    assert "largest gap between target and achieved coverage is 0.040" in body
+    assert "normalized scheme at the 90% target" in body
+
+
+def test_serving_reports_batching_as_a_gain_when_it_is_one() -> None:
+    body = load_module().RENDER["SERVING"](serving_payload())
+    assert "divides p95 by 1.44" in body
+    assert "slower" not in body
+
+
+def test_serving_calls_batching_a_slowdown_when_that_is_what_was_measured() -> None:
+    """Measured on this machine: batching cost 3.9x at p95, because the CPU was already busy."""
+    body = load_module().RENDER["SERVING"](serving_payload(on_p95=3500.0, on_throughput=35.0))
+    assert "3.9 times slower at p95" in body
+    assert "4.0 times slower on throughput" in body
+    assert "divides p95" not in body
 
 
 def test_a_placeholder_is_replaced_and_then_re_rendered_in_place() -> None:

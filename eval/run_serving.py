@@ -184,7 +184,8 @@ def main() -> None:
             "requests_per_client": REQUESTS_PER_CLIENT,
         },
         "measurements": measurements,
-        "batching_speedup": warm_off["p95_ms"] / warm_on["p95_ms"],
+        # Above 1 means batching helps. Measured below 1 on this CPU: see the README.
+        "batching_p95_ratio": warm_off["p95_ms"] / warm_on["p95_ms"],
         "ab": {"arms": ab["arms"], "expected_candidate_share": expected},
         "shadow": {"median_ms": shadow["median_ms"], "comparisons": sum(1 for _ in shadow_log.open())},
         "calibration": calibration,

@@ -137,6 +137,10 @@ def test_accuracy_reports_a_baseline_it_does_not_beat() -> None:
     body = module.RENDER["ACCURACY"](payload)
     assert "is not beaten here" in body
     assert "-0.110" in body
+    # The gate's accuracy criterion is zero-shot, not the best baseline, so a model in this
+    # position is still promoted. The section has to admit that rather than imply a rejection.
+    assert "The release gate does not catch this" in body
+    assert "reject" in body
 
 
 def test_the_gate_section_gives_a_reason_for_every_rejection() -> None:

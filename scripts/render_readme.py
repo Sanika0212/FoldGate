@@ -69,7 +69,7 @@ def accuracy(train: dict[str, Any]) -> str:
     if baselines:
         lines.append("Against the baselines, by mean Spearman across assays:")
         lines.append("")
-        lines.append("| baseline | Spearman | this model beats it by |")
+        lines.append("| baseline | Spearman | difference against this model |")
         lines.append("| --- | --- | --- |")
         for name, value in sorted(baselines.items(), key=lambda kv: -kv[1]):
             delta = train["mean_spearman"] - value
@@ -78,8 +78,19 @@ def accuracy(train: dict[str, Any]) -> str:
         assert best_baseline is not None
         if train["mean_spearman"] <= best_baseline[1]:
             lines.append(
-                f"The strongest baseline, {best_baseline[0]}, is not beaten here. That is the "
-                "number as measured, and the release gate rejects a model in this position."
+                f"The strongest baseline, {best_baseline[0]}, is not beaten here: "
+                f"{best_baseline[1]:.3f} against {train['mean_spearman']:.3f}. A ridge regression "
+                "on one-hot mutations plus the zero-shot score is cheaper to fit than this model "
+                "and scores better on these assays, so nothing here argues for the trained model "
+                "on accuracy alone. What it adds is the calibrated interval, which the baseline "
+                "does not have."
+            )
+            lines.append("")
+            lines.append(
+                "The release gate does not catch this, and that is worth naming: its accuracy "
+                "criterion is only that the model beat zero-shot, which it does by a wide margin. "
+                "A gate that compared against the best available baseline would reject this "
+                "candidate. The one built here promotes it."
             )
             lines.append("")
     return "\n".join(lines)

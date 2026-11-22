@@ -1,0 +1,218 @@
+{
+  "scheme": "contiguous",
+  "seed": 0,
+  "backbone": "facebook/esm2_t12_35M_UR50D",
+  "epochs": 6,
+  "rank": 8,
+  "trainable_share": 0.0073441774959805365,
+  "n": {
+    "train": 9850,
+    "calib": 3495,
+    "test": 8704
+  },
+  "per_assay": [
+    {
+      "dms_id": "BLAT_ECOLX_Firnberg_2014",
+      "n": 1903,
+      "spearman": 0.6423961256326571,
+      "ndcg_top10": 0.7086711682712907
+    },
+    {
+      "dms_id": "CALM1_HUMAN_Weile_2017",
+      "n": 673,
+      "spearman": 0.31178242591397154,
+      "ndcg_top10": 0.8209433799074914
+    },
+    {
+      "dms_id": "CCDB_ECOLI_Tripathi_2016",
+      "n": 642,
+      "spearman": 0.17467459182197206,
+      "ndcg_top10": 0.9122630378344203
+    },
+    {
+      "dms_id": "DYR_ECOLI_Thompson_2019",
+      "n": 932,
+      "spearman": 0.43917542539914406,
+      "ndcg_top10": 0.8970347344440563
+    },
+    {
+      "dms_id": "ESTA_BACSU_Nutschel_2020",
+      "n": 888,
+      "spearman": 0.24971253568165544,
+      "ndcg_top10": 0.6972094589931427
+    },
+    {
+      "dms_id": "NUD15_HUMAN_Suiter_2020",
+      "n": 1122,
+      "spearman": 0.3004485969037971,
+      "ndcg_top10": 0.7926721861812348
+    },
+    {
+      "dms_id": "RASH_HUMAN_Bandaru_2017",
+      "n": 1254,
+      "spearman": 0.41960147435171774,
+      "ndcg_top10": 0.6833949873349796
+    },
+    {
+      "dms_id": "SUMO1_HUMAN_Weile_2017",
+      "n": 682,
+      "spearman": 0.4580148991333878,
+      "ndcg_top10": 0.7101397342201368
+    },
+    {
+      "dms_id": "TAT_HV1BR_Fernandes_2016",
+      "n": 608,
+      "spearman": 0.02688408802498207,
+      "ndcg_top10": 0.6714367277355299
+    }
+  ],
+  "mean_spearman": 0.33585446254036494,
+  "mean_ndcg_top10": 0.7659739349913647,
+  "pooled_spearman": 0.4118723259363434,
+  "baseline_mean_spearman": {
+    "zero_shot": 0.2970876864728005,
+    "ridge_one_hot": 0.1408145396680649,
+    "ridge_one_hot_plus_zero_shot": 0.3341500439657583
+  },
+  "coverage": {
+    "0.80": {
+      "split": {
+        "coverage": 0.6919806985294118,
+        "width": 1.6311836242675781,
+        "terciles": [
+          0.7121682178559118,
+          0.6670113753877973,
+          0.6967608545830462
+        ]
+      },
+      "normalized": {
+        "coverage": 0.6617647058823529,
+        "width": 1.6687499711673304,
+        "terciles": [
+          0.5218890037917959,
+          0.6432264736297828,
+          0.8201240523776706
+        ]
+      }
+    },
+    "0.90": {
+      "split": {
+        "coverage": 0.8336397058823529,
+        "width": 2.3392488956451416,
+        "terciles": [
+          0.8355739400206825,
+          0.8293691830403309,
+          0.8359751895244659
+        ]
+      },
+      "normalized": {
+        "coverage": 0.7994025735294118,
+        "width": 2.3974079789021014,
+        "terciles": [
+          0.6701137538779731,
+          0.8028266115132713,
+          0.9252239834596829
+        ]
+      }
+    },
+    "0.95": {
+      "split": {
+        "coverage": 0.904296875,
+        "width": 2.942192316055298,
+        "terciles": [
+          0.897276801103068,
+          0.9072733540158566,
+          0.9083390764989663
+        ]
+      },
+      "normalized": {
+        "coverage": 0.8895909926470589,
+        "width": 3.2426363704170154,
+        "terciles": [
+          0.7900723888314375,
+          0.9052051016890728,
+          0.9734665747760165
+        ]
+      }
+    }
+  },
+  "selective": {
+    "k": 10,
+    "per_assay": [
+      {
+        "dms_id": "BLAT_ECOLX_Firnberg_2014",
+        "ndcg_by_score": 0.6358198219934972,
+        "ndcg_confident_only": 0.6345224229008259,
+        "hits_by_score": 0.3,
+        "hits_confident_only": 0.4
+      },
+      {
+        "dms_id": "CALM1_HUMAN_Weile_2017",
+        "ndcg_by_score": 0.8325518473854263,
+        "ndcg_confident_only": 0.7756250446491556,
+        "hits_by_score": 0.1,
+        "hits_confident_only": 0.1
+      },
+      {
+        "dms_id": "CCDB_ECOLI_Tripathi_2016",
+        "ndcg_by_score": 1.0,
+        "ndcg_confident_only": 1.0,
+        "hits_by_score": 0.5,
+        "hits_confident_only": 0.6
+      },
+      {
+        "dms_id": "DYR_ECOLI_Thompson_2019",
+        "ndcg_by_score": 0.8493683160093836,
+        "ndcg_confident_only": 0.828033828741887,
+        "hits_by_score": 0.2,
+        "hits_confident_only": 0.1
+      },
+      {
+        "dms_id": "ESTA_BACSU_Nutschel_2020",
+        "ndcg_by_score": 0.7483998243829547,
+        "ndcg_confident_only": 0.7163788880625873,
+        "hits_by_score": 0.5,
+        "hits_confident_only": 0.5
+      },
+      {
+        "dms_id": "NUD15_HUMAN_Suiter_2020",
+        "ndcg_by_score": 0.8147922835692727,
+        "ndcg_confident_only": 0.818935102707975,
+        "hits_by_score": 0.3,
+        "hits_confident_only": 0.3
+      },
+      {
+        "dms_id": "RASH_HUMAN_Bandaru_2017",
+        "ndcg_by_score": 0.4047034993346255,
+        "ndcg_confident_only": 0.4645840400662711,
+        "hits_by_score": 0.0,
+        "hits_confident_only": 0.2
+      },
+      {
+        "dms_id": "SUMO1_HUMAN_Weile_2017",
+        "ndcg_by_score": 0.5970759543949704,
+        "ndcg_confident_only": 0.617655534056892,
+        "hits_by_score": 0.0,
+        "hits_confident_only": 0.1
+      },
+      {
+        "dms_id": "TAT_HV1BR_Fernandes_2016",
+        "ndcg_by_score": 0.5241519887723224,
+        "ndcg_confident_only": 0.5498202535057481,
+        "hits_by_score": 0.2,
+        "hits_confident_only": 0.2
+      }
+    ],
+    "ndcg_by_score": 0.711873726204717,
+    "ndcg_confident_only": 0.7117283460768158,
+    "hits_by_score": 0.23333333333333334,
+    "hits_confident_only": 0.2777777777777778
+  },
+  "calibration": {
+    "alpha": 0.1,
+    "q_plain": 1.1696245670318604,
+    "q_normalized": 1.0999810702726849,
+    "abstain_width": 3.709464404834776,
+    "scheme": "contiguous"
+  }
+}

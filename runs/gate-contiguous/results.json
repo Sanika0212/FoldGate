@@ -1,0 +1,107 @@
+{
+  "scheme": "contiguous",
+  "slo_ms": 3000.0,
+  "target_coverage": 0.9,
+  "candidates": {
+    "lora-conformal": {
+      "metrics": {
+        "spearman": 0.33585446254036494,
+        "spearman_pooled": 0.4118723259363434,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.7994025735294118,
+        "target_coverage": 0.9,
+        "mean_width": 2.397407978902102,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "coverage 0.799 is outside 0.90 +/- 0.02"
+        ],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.33585446254036494,
+        "spearman_pooled": 0.4118723259363434,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.7994025735294118,
+        "target_coverage": 0.9,
+        "mean_width": 2.397407978902102,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "registry": {
+        "run_id": "b6338b32cb89432ba60a9517c004b7e8",
+        "version": 4,
+        "champion": false
+      }
+    },
+    "lora-narrow-intervals": {
+      "metrics": {
+        "spearman": 0.33585446254036494,
+        "spearman_pooled": 0.4118723259363434,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.5667509191176471,
+        "target_coverage": 0.9,
+        "mean_width": 1.2937892553169716,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "coverage 0.567 is outside 0.90 +/- 0.02"
+        ],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.33585446254036494,
+        "spearman_pooled": 0.4118723259363434,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.5667509191176471,
+        "target_coverage": 0.9,
+        "mean_width": 1.2937892553169716,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "registry": {
+        "run_id": "7ab4cb465d6d4bdca4735ec7c27b2881",
+        "version": 5,
+        "champion": false
+      }
+    },
+    "zero-shot-only": {
+      "metrics": {
+        "spearman": 0.2970876864728005,
+        "spearman_pooled": 0.30901812932601913,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.9217601102941176,
+        "target_coverage": 0.9,
+        "mean_width": 4.739997496551363,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "Spearman 0.297 does not beat zero-shot 0.297",
+          "coverage 0.922 is outside 0.90 +/- 0.02"
+        ],
+        "slo_ms": 3000.0,
+        "tolerance": 0.02,
+        "spearman": 0.2970876864728005,
+        "spearman_pooled": 0.30901812932601913,
+        "spearman_zero_shot": 0.2970876864728005,
+        "coverage": 0.9217601102941176,
+        "target_coverage": 0.9,
+        "mean_width": 4.739997496551363,
+        "p95_ms": 830.2849581021292,
+        "latency_measured": true
+      },
+      "registry": {
+        "run_id": "32bdbe6dc8f14ac18f01d83ae5324dc5",
+        "version": 6,
+        "champion": false
+      }
+    }
+  }
+}

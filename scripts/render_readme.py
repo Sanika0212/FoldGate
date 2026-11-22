@@ -22,6 +22,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs"
 README = ROOT / "README.md"
 MARKERS = ("ACCURACY", "CALIBRATION", "SHIFT", "GATE", "SERVING")
+SCHEMES = ("random", "contiguous")
+ASSETS = Path("docs/assets")
+# The figure that belongs with each section, by basename. make_figures.py writes a light and
+# a dark variant of each, and a section leaves its figure out when the file is not there.
+FIGURES = {
+    "ACCURACY": ("accuracy", "png", "Spearman per assay against the baselines"),
+    "CALIBRATION": ("calibration", "png", "Achieved coverage against its target"),
+    "SHIFT": ("shift", "png", "Coverage on held-out families, before and after relabelling"),
+    "GATE": ("gate", "gif", "Three candidates going through the release gate"),
+    "SERVING": ("serving", "png", "Latency and throughput under load"),
+}
+# What the release gate allows between a target and its achieved coverage.
+TOLERANCE = 0.02
 # Which results file each section needs.
 NEEDS = {
     "ACCURACY": "train",
@@ -96,7 +109,7 @@ def accuracy(train: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def calibration(train: dict[str, Any]) -> str:
+def calibration(train: dict[str, Any], other: dict[str, Any] | None = None) -> str:
     lines = [
         "## Do the intervals mean what they say",
         "",
@@ -146,7 +159,48 @@ def calibration(train: dict[str, Any]) -> str:
         f"at the {float(worst[1]):.0%} target.",
         "",
     ]
+    if other and other.get("coverage"):
+        lines += _exchangeability(train, other)
     return "\n".join(lines)
+
+
+def _exchangeability(train: dict[str, Any], other: dict[str, Any]) -> list[str]:
+    """What the same calibration does on a split that breaks exchangeability.
+
+    The guarantee is conditional on it, and a random split over variants satisfies it while
+    a contiguous one over positions does not: calibration and test then come from different
+    stretches of the protein. This is the comparison the claim rests on, so it belongs here
+    rather than being left for a reader to assemble from two results files.
+    """
+    lines = [
+        "### The same method on a split that breaks the assumption",
+        "",
+        "Coverage above is measured on the random split, where a variant's position is as "
+        "likely to land in calibration as in test, which is what exchangeability asks for. "
+        f"The {other['scheme']} split holds out whole stretches of the protein, so the "
+        "calibration variants and the test variants come from different regions and the "
+        "assumption fails. Nothing else changes: same backbone, same rank, same epochs, "
+        "same conformal method.",
+        "",
+        f"| target | random split | {other['scheme']} split | miss |",
+        "| --- | --- | --- | --- |",
+    ]
+    for target in sorted(train["coverage"], reverse=True):
+        here = float(train["coverage"][target]["split"]["coverage"])
+        there = float(other["coverage"][target]["split"]["coverage"])
+        lines.append(f"| {float(target):.0%} | {here:.3f} | {there:.3f} | {there - float(target):+.3f} |")
+    worst = max(abs(float(t) - float(b["split"]["coverage"])) for t, b in other["coverage"].items())
+    lines += [
+        "",
+        f"The promise misses by as much as {worst:.3f} there, against the {TOLERANCE:.2f} the "
+        "release gate allows, so the gate rejects that model on coverage and is right to. "
+        f"Accuracy falls too, mean Spearman {other['mean_spearman']:.3f} against "
+        f"{train['mean_spearman']:.3f}, which is the easier half of the finding: a harder "
+        "split is harder. The interval is the part worth looking at, because it was still "
+        "reporting the same nominal confidence while covering far less than it claimed.",
+        "",
+    ]
+    return lines
 
 
 def shift(data: dict[str, Any]) -> str:
@@ -302,8 +356,31 @@ RENDER = {
 }
 
 
+def figure(marker: str) -> str:
+    """The section's figure, or nothing when it has not been generated.
+
+    These were written by make_figures.py and referenced nowhere, so the only way to see
+    them was to go looking in docs/assets. Rendered from the same marker as the numbers, so
+    one command keeps the figure and the table it sits under in step.
+    """
+    if marker not in FIGURES:
+        return ""
+    name, suffix, alt = FIGURES[marker]
+    light, dark = ASSETS / f"{name}-light.{suffix}", ASSETS / f"{name}-dark.{suffix}"
+    if not light.exists():
+        return ""
+    if not dark.exists():
+        return f'\n<img alt="{alt}" src="{light.as_posix()}" width="100%">\n'
+    return (
+        "\n<picture>\n"
+        f'  <source media="(prefers-color-scheme: dark)" srcset="{dark.as_posix()}">\n'
+        f'  <img alt="{alt}" src="{light.as_posix()}" width="100%">\n'
+        "</picture>\n"
+    )
+
+
 def block(marker: str, body: str) -> str:
-    return f"<!-- {marker}:start -->\n{body}\n<!-- {marker}:end -->"
+    return f"<!-- {marker}:start -->\n{body}{figure(marker)}\n<!-- {marker}:end -->"
 
 
 def replace(text: str, marker: str, body: str) -> str:
@@ -328,6 +405,10 @@ def main() -> None:
         data = results(NEEDS[marker], args.scheme)
         if data is None:
             missing.append(f"{marker} needs runs/{NEEDS[marker]}-{args.scheme}/results.json")
+            continue
+        if marker == "CALIBRATION":
+            elsewhere = next((results("train", s) for s in SCHEMES if s != args.scheme), None)
+            text = replace(text, marker, RENDER[marker](data, elsewhere))
             continue
         text = replace(text, marker, RENDER[marker](data))
 

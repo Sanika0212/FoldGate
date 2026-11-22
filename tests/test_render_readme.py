@@ -200,6 +200,28 @@ def test_serving_reports_batching_as_a_gain_when_it_is_one() -> None:
     assert "slower" not in body
 
 
+def test_calibration_compares_the_split_that_breaks_exchangeability() -> None:
+    """The project's central claim, so the section has to carry it rather than imply it."""
+    module = load_module()
+    random = train_payload()
+    contiguous = train_payload()
+    contiguous["scheme"] = "contiguous"
+    contiguous["mean_spearman"] = 0.336
+    for target, achieved in (("0.80", 0.692), ("0.90", 0.834), ("0.95", 0.904)):
+        contiguous["coverage"][target]["split"]["coverage"] = achieved
+
+    body = module.RENDER["CALIBRATION"](random, contiguous)
+    assert "breaks the assumption" in body
+    assert "| 90% | 0.903 | 0.834 | -0.066 |" in body
+    assert "misses by as much as 0.108" in body
+    assert "0.336 against 0.545" in body
+
+
+def test_calibration_says_nothing_about_a_scheme_that_was_not_run() -> None:
+    body = load_module().RENDER["CALIBRATION"](train_payload(), None)
+    assert "breaks the assumption" not in body
+
+
 def test_serving_shows_the_spread_of_the_repeats() -> None:
     """One draw of this load test varied by more than 2x, so the range has to be visible."""
     body = load_module().RENDER["SERVING"](serving_payload())
@@ -227,6 +249,31 @@ def test_serving_calls_batching_a_slowdown_when_that_is_what_was_measured() -> N
     assert "3.9 times slower at p95" in body
     assert "4.0 times slower on throughput" in body
     assert "divides p95" not in body
+
+
+def test_a_section_includes_its_figure_only_when_it_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """make_figures.py wrote these and nothing referenced them, so nobody saw them."""
+    module = load_module()
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    monkeypatch.setattr(module, "ASSETS", assets)
+
+    assert module.figure("ACCURACY") == ""  # nothing generated yet
+
+    (assets / "accuracy-light.png").write_bytes(b"light")
+    only_light = module.figure("ACCURACY")
+    assert "accuracy-light.png" in only_light
+    assert "<picture>" not in only_light  # no dark variant to switch to
+
+    (assets / "accuracy-dark.png").write_bytes(b"dark")
+    both = module.figure("ACCURACY")
+    assert "prefers-color-scheme: dark" in both
+    assert "accuracy-dark.png" in both
+    assert "accuracy-light.png" in both
+
+    assert module.figure("NOT_A_SECTION") == ""
 
 
 def test_a_placeholder_is_replaced_and_then_re_rendered_in_place() -> None:

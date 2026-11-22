@@ -55,11 +55,22 @@ def main() -> None:
     # by more than a factor of two between runs, so one draw could pass or fail the SLO by
     # itself. Falls back to the raw rows for a results file written before repeats existed.
     warm_summary = serving.get("warm", {}).get("on", {})
+    warm = [m for m in serving.get("measurements", []) if m["batching"] == "on" and m["cache"] == "warm"]
     if warm_summary:
         p95_ms = float(warm_summary["p95_ms_median"])
+    elif warm:
+        p95_ms = float(np.median([float(m["p95_ms"]) for m in warm]))
     else:
-        warm = [m for m in serving.get("measurements", []) if m["batching"] == "on" and m["cache"] == "warm"]
-        p95_ms = float(np.median([float(m["p95_ms"]) for m in warm])) if warm else 0.0
+        # Not measured is not the same as fast. This was 0.0, so a gate run without a
+        # serving run passed its latency criterion on a number nobody had measured. A
+        # release gate holding an unmeasured criterion should refuse, so it gets infinity.
+        p95_ms = float("inf")
+    measured_latency = bool(warm_summary or warm)
+    if not measured_latency:
+        print(
+            f"no serving results for {args.scheme}: the latency criterion cannot be met, so "
+            "every candidate is rejected on it. Run eval/run_serving.py first."
+        )
     onnx_dir = art / "onnx" if (art / "onnx").exists() else None
 
     rng = np.random.default_rng(args.seed)
@@ -128,6 +139,7 @@ def main() -> None:
             "target_coverage": TARGET,
             "mean_width": float(2 * c["q"] * sigma_test.mean()),
             "p95_ms": p95_ms,
+            "latency_measured": measured_latency,
         }
         calibration = {
             "alpha": round(1 - TARGET, 2),
